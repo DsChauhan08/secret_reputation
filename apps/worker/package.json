@@ -7,8 +7,9 @@
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
-    "wrangler": "^4.0.0",
-    "typescript": "~5.9.2"
+    "@cloudflare/workers-types": "^4.20260412.1",
+    "typescript": "~5.9.2",
+    "wrangler": "^4.0.0"
   },
   "dependencies": {
     "@secret-reputation/shared": "*"
