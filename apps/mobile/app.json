@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Secret Reputation",
+    "slug": "secret-reputation",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "secretrep",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0B0F"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.secretreputation.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B0B0F"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.secretreputation.app"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
