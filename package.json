@@ -1,0 +1,8 @@
+{
+  "name": "secret-reputation",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

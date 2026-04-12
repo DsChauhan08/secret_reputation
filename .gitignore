@@ -1,0 +1,10 @@
+node_modules/
+.expo/
+dist/
+*.tsbuildinfo
+.wrangler/
+.dev.vars
+*.apk
+*.aab
+*.ipa
+.DS_Store
