@@ -13,8 +13,9 @@ import {
 import { colors, gradients, typography, spacing, radii } from "../../src/theme";
 import { useGameStore } from "../../src/store";
 import { wsClient } from "../../src/ws";
-import { getCategoriesByMode, isContentSafe } from "@secret-reputation/shared";
-import type { Category, RoomMode } from "@secret-reputation/shared";
+import { getCategoriesByMode, isContentSafe } from "../../src/gamedata";
+import type { Category } from "../../src/gamedata";
+import type { RoomMode } from "../../src/store";
 
 const MIN_CATEGORIES = 3;
 const MAX_CATEGORIES = 12;

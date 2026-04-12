@@ -1,6 +1,9 @@
-import { Dimensions } from "react-native";
+import { Platform, Dimensions } from "react-native";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+export { SCREEN_WIDTH, SCREEN_HEIGHT };
+// System font: San Francisco on iOS, Roboto on Android
+const FONT_FAMILY = Platform.OS === "ios" ? "System" : "Roboto";
 
 export const colors = {
   bg: "#0B0B0F",
@@ -61,66 +64,72 @@ export const typography = {
     fontWeight: "800" as const,
     letterSpacing: -1.5,
     color: colors.text,
+    fontFamily: FONT_FAMILY,
   },
   h1: {
     fontSize: 32,
     fontWeight: "700" as const,
     letterSpacing: -1,
     color: colors.text,
+    fontFamily: FONT_FAMILY,
   },
   h2: {
     fontSize: 24,
     fontWeight: "600" as const,
     letterSpacing: -0.5,
     color: colors.text,
+    fontFamily: FONT_FAMILY,
   },
   h3: {
     fontSize: 20,
     fontWeight: "600" as const,
     color: colors.text,
+    fontFamily: FONT_FAMILY,
   },
   body: {
     fontSize: 16,
     fontWeight: "400" as const,
     color: colors.text,
+    fontFamily: FONT_FAMILY,
   },
   bodyBold: {
     fontSize: 16,
     fontWeight: "600" as const,
     color: colors.text,
+    fontFamily: FONT_FAMILY,
   },
   caption: {
     fontSize: 14,
     fontWeight: "400" as const,
     color: colors.textSecondary,
+    fontFamily: FONT_FAMILY,
   },
   small: {
     fontSize: 12,
     fontWeight: "400" as const,
     color: colors.textMuted,
+    fontFamily: FONT_FAMILY,
   },
   mono: {
     fontSize: 28,
     fontWeight: "700" as const,
     letterSpacing: 6,
     color: colors.text,
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
 } as const;
 
-// Player avatar colors (no emojis — just distinct colors)
 export const PLAYER_COLORS = [
-  "#8B5CF6", // violet
-  "#06F5C1", // cyan
-  "#F43F5E", // rose
-  "#F59E0B", // amber
-  "#3B82F6", // blue
-  "#10B981", // emerald
-  "#EC4899", // pink
-  "#F97316", // orange
-  "#14B8A6", // teal
-  "#6366F1", // indigo
-  "#EF4444", // red
-  "#84CC16", // lime
+  "#8B5CF6",
+  "#06F5C1",
+  "#F43F5E",
+  "#F59E0B",
+  "#3B82F6",
+  "#10B981",
+  "#EC4899",
+  "#F97316",
+  "#14B8A6",
+  "#6366F1",
+  "#EF4444",
+  "#84CC16",
 ] as const;
-
-export { SCREEN_WIDTH, SCREEN_HEIGHT };

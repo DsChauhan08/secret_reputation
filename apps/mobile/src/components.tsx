@@ -473,8 +473,18 @@ interface ScreenProps {
 }
 
 export function Screen({ children, style }: ScreenProps) {
+  const insets = require("react-native-safe-area-context").useSafeAreaInsets();
   return (
-    <View style={[styles.screen, style]}>
+    <View
+      style={[
+        styles.screen,
+        {
+          paddingTop: insets.top + spacing.sm,
+          paddingBottom: insets.bottom + spacing.sm,
+        },
+        style,
+      ]}
+    >
       {children}
     </View>
   );

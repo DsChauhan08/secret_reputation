@@ -13,7 +13,7 @@ import {
 import { colors, gradients, typography, spacing, radii } from "../src/theme";
 import { useGameStore } from "../src/store";
 import { wsClient } from "../src/ws";
-import type { RoomMode } from "@secret-reputation/shared";
+import type { RoomMode } from "../src/store";
 
 const MODES: { key: RoomMode; title: string; desc: string; color: string }[] = [
   {
