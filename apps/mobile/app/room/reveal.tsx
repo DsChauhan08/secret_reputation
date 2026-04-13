@@ -1,266 +1,121 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeInUp,
-  FadeOut,
-  SlideInUp,
-  ZoomIn,
-  useSharedValue,
-  useAnimatedStyle,
-  withSequence,
-  withTiming,
-  withSpring,
-  withDelay,
-  withRepeat,
-  Easing,
-  runOnJS,
-} from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { Screen, GradientButton } from "../../src/components";
-import { colors, gradients, typography, spacing, radii, SCREEN_WIDTH } from "../../src/theme";
+import { Screen, SoftButton, Card } from "../../src/components";
+import { colors, typography, spacing, radii, shadow } from "../../src/theme";
 import { useGameStore } from "../../src/store";
-import { wsClient } from "../../src/ws";
 
-type RevealPhase = "category" | "tension" | "winner" | "stats" | "commentary" | "done";
+type RevealPhase = "category" | "countdown" | "winner" | "commentary" | "stats" | "next";
 
 export default function RevealScreen() {
   const router = useRouter();
   const room = useGameStore((s) => s.room);
-  const playerId = useGameStore((s) => s.playerId);
-  const isHost = room?.hostId === playerId;
-
-  const results = room?.results ?? [];
-  const latestResult = results[results.length - 1];
-  const hasMoreRounds = room ? room.currentRound < room.selectedCategoryIds.length - 1 : false;
-
   const [phase, setPhase] = useState<RevealPhase>("category");
 
-  // Glow animation
-  const glowScale = useSharedValue(0.8);
-  const glowOpacity = useSharedValue(0);
-
-  // Shake animation for tension
-  const shakeX = useSharedValue(0);
-
-  // Winner card scale
-  const winnerScale = useSharedValue(0);
+  const latestResult = room?.results?.[room.results.length - 1];
 
   useEffect(() => {
     if (!latestResult) return;
 
-    // Phase 1: Category appears (already visible)
-    // Phase 2: Tension build at 1.5s
-    const t1 = setTimeout(() => {
-      setPhase("tension");
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-
-      // Shake effect
-      shakeX.value = withSequence(
-        withTiming(-4, { duration: 50 }),
-        withTiming(4, { duration: 50 }),
-        withTiming(-3, { duration: 50 }),
-        withTiming(3, { duration: 50 }),
-        withTiming(-2, { duration: 50 }),
-        withTiming(0, { duration: 50 })
-      );
-    }, 1500);
-
-    // Phase 3: Winner reveal at 3s
-    const t2 = setTimeout(() => {
-      setPhase("winner");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // Glow burst
-      glowOpacity.value = withSequence(
-        withTiming(0.8, { duration: 200 }),
-        withTiming(0.3, { duration: 1000 })
-      );
-      glowScale.value = withSequence(
-        withTiming(1.2, { duration: 300 }),
-        withSpring(1, { damping: 10 })
-      );
-
-      // Winner card entrance
-      winnerScale.value = withSpring(1, {
-        damping: 12,
-        stiffness: 100,
-      });
-    }, 3000);
-
-    // Phase 4: Vote count at 4.2s
-    const t3 = setTimeout(() => {
-      setPhase("stats");
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }, 4200);
-
-    // Phase 5: Commentary at 5.2s
-    const t4 = setTimeout(() => {
-      setPhase("commentary");
-    }, 5200);
-
-    // Phase 6: Controls at 6.5s
-    const t5 = setTimeout(() => {
-      setPhase("done");
-    }, 6500);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-      clearTimeout(t5);
+    const timings: Record<RevealPhase, number> = {
+      category: 2000,
+      countdown: 1500,
+      winner: 3000,
+      commentary: 2500,
+      stats: 3000,
+      next: 0,
     };
+
+    const sequence: RevealPhase[] = ["category", "countdown", "winner", "commentary", "stats", "next"];
+    let i = 0;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const advance = () => {
+      if (i >= sequence.length - 1) return;
+      timer = setTimeout(() => {
+        i++;
+        setPhase(sequence[i]);
+        if (sequence[i] === "winner") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        advance();
+      }, timings[sequence[i]]);
+    };
+
+    setPhase("category");
+    advance();
+    return () => clearTimeout(timer);
   }, [latestResult?.categoryId]);
 
-  // Listen for next round / game end
   useEffect(() => {
-    if (room?.status === "voting") {
-      setPhase("category");
-      winnerScale.value = 0;
-      glowOpacity.value = 0;
-      router.replace("/room/vote");
-    }
-    if (room?.status === "ended") {
-      router.replace("/room/end");
-    }
+    if (room?.status === "voting") { setPhase("category"); router.replace("/room/vote"); }
+    if (room?.status === "ended") router.replace("/room/end");
   }, [room?.status]);
 
-  const shakeStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shakeX.value }],
-  }));
-
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value,
-    transform: [{ scale: glowScale.value }],
-  }));
-
-  const winnerStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: winnerScale.value }],
-  }));
+  if (!room || !latestResult) return null;
 
   const handleNext = () => {
-    if (hasMoreRounds) {
-      wsClient.send({ type: "NEXT_ROUND", payload: {} });
-    } else {
-      router.replace("/room/end");
+    const isHost = room.hostId === useGameStore.getState().playerId;
+    if (isHost) {
+      router.push("/room/result");
     }
   };
-
-  const handleViewCard = () => {
-    router.push("/room/result");
-  };
-
-  if (!latestResult) return null;
 
   return (
     <Screen style={styles.container}>
-      {/* Background glow */}
-      <Animated.View style={[styles.bgGlow, glowStyle]}>
-        <LinearGradient
-          colors={[`${latestResult.winnerColor}40`, "transparent"]}
-          style={StyleSheet.absoluteFill}
-          start={{ x: 0.5, y: 0.3 }}
-          end={{ x: 0.5, y: 0.8 }}
-        />
-      </Animated.View>
+      {phase === "category" && (
+        <Animated.View key="cat" entering={FadeIn.duration(400)} exiting={FadeOut.duration(200)} style={styles.center}>
+          <Text style={[typography.small, { color: colors.textMuted, letterSpacing: 1.5 }]}>THE CATEGORY</Text>
+          <Text style={[typography.h1, { marginTop: spacing.lg, textAlign: "center" }]}>{latestResult.categoryText}</Text>
+        </Animated.View>
+      )}
 
-      <Animated.View style={[styles.content, shakeStyle]}>
-        {/* Category */}
-        <Animated.View entering={FadeInDown.duration(600)}>
-          <Text style={styles.roundIndicator}>
-            ROUND {(room?.currentRound ?? 0) + 1}
-          </Text>
-          <Text style={styles.categoryText}>
-            {latestResult.categoryText}
+      {phase === "countdown" && (
+        <Animated.View key="cd" entering={FadeIn.duration(200)} exiting={FadeOut.duration(200)} style={styles.center}>
+          <Text style={[typography.display, { color: colors.primary }]}>...</Text>
+        </Animated.View>
+      )}
+
+      {phase === "winner" && (
+        <Animated.View key="win" entering={FadeIn.duration(500)} exiting={FadeOut.duration(200)} style={styles.center}>
+          <View style={[styles.winnerCard, { borderColor: latestResult.winnerColor }]}>
+            <View style={[styles.winnerAvatar, { backgroundColor: latestResult.winnerColor }]}>
+              <Text style={styles.winnerAvatarText}>{latestResult.winnerName.charAt(0).toUpperCase()}</Text>
+            </View>
+            <Text style={[typography.h1, { marginTop: spacing.lg }]}>{latestResult.winnerName}</Text>
+            <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.textMuted }]}>
+              {latestResult.winnerVotes} of {latestResult.totalVotes} votes
+            </Text>
+          </View>
+        </Animated.View>
+      )}
+
+      {phase === "commentary" && (
+        <Animated.View key="cmt" entering={FadeIn.duration(400)} exiting={FadeOut.duration(200)} style={styles.center}>
+          <Text style={[typography.h3, { textAlign: "center", color: colors.textSecondary, fontStyle: "italic", lineHeight: 28 }]}>
+            "{latestResult.commentary}"
           </Text>
         </Animated.View>
+      )}
 
-        {/* Tension dots */}
-        {phase === "tension" && (
-          <Animated.View entering={FadeIn.duration(300)} exiting={FadeOut.duration(200)}>
-            <Text style={styles.tensionDots}>. . .</Text>
-          </Animated.View>
-        )}
+      {phase === "stats" && (
+        <Animated.View key="stats" entering={FadeIn.duration(400)} exiting={FadeOut.duration(200)} style={styles.center}>
+          <Text style={[typography.small, { color: colors.textMuted, letterSpacing: 1.5, marginBottom: spacing.lg }]}>VOTE BREAKDOWN</Text>
+          {latestResult.voteCounts.map((vc) => (
+            <View key={vc.playerId} style={styles.statRow}>
+              <View style={[styles.statDot, { backgroundColor: vc.playerColor }]} />
+              <Text style={[typography.body, { flex: 1 }]}>{vc.playerName}</Text>
+              <Text style={[typography.bodyBold, { color: vc.count > 0 ? colors.text : colors.textMuted }]}>{vc.count}</Text>
+            </View>
+          ))}
+        </Animated.View>
+      )}
 
-        {/* Winner Card */}
-        {(phase === "winner" || phase === "stats" || phase === "commentary" || phase === "done") && (
-          <Animated.View style={[styles.winnerCard, winnerStyle]}>
-            <LinearGradient
-              colors={[`${latestResult.winnerColor}30`, `${latestResult.winnerColor}05`]}
-              style={styles.winnerGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              {/* Winner avatar */}
-              <View style={[styles.winnerAvatar, { backgroundColor: latestResult.winnerColor }]}>
-                <Text style={styles.winnerAvatarText}>
-                  {latestResult.winnerName.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-
-              {/* Winner name */}
-              <Text style={styles.winnerName}>
-                {latestResult.winnerName}
-              </Text>
-
-              {/* Vote count */}
-              {(phase === "stats" || phase === "commentary" || phase === "done") && (
-                <Animated.View entering={FadeInUp.duration(400)}>
-                  <Text style={styles.voteCount}>
-                    {latestResult.winnerVotes} vote{latestResult.winnerVotes !== 1 ? "s" : ""}
-                  </Text>
-                </Animated.View>
-              )}
-
-              {/* Runner up */}
-              {(phase === "stats" || phase === "commentary" || phase === "done") &&
-                latestResult.runnerName && (
-                  <Animated.View entering={FadeIn.duration(400).delay(200)}>
-                    <Text style={styles.runnerText}>
-                      runner-up: {latestResult.runnerName} ({latestResult.runnerVotes})
-                    </Text>
-                  </Animated.View>
-                )}
-            </LinearGradient>
-          </Animated.View>
-        )}
-
-        {/* Commentary */}
-        {(phase === "commentary" || phase === "done") && (
-          <Animated.View entering={FadeInUp.duration(600)}>
-            <Text style={styles.commentary}>
-              {latestResult.commentary}
-            </Text>
-          </Animated.View>
-        )}
-      </Animated.View>
-
-      {/* Controls */}
-      {phase === "done" && (
-        <Animated.View entering={FadeInUp.duration(400)} style={styles.footer}>
-          <GradientButton
-            title="VIEW CARD"
-            onPress={handleViewCard}
-            gradient={gradients.dark}
-            size="md"
-          />
-          <View style={{ height: spacing.sm }} />
-          {isHost && (
-            <GradientButton
-              title={hasMoreRounds ? "NEXT ROUND" : "SEE RESULTS"}
-              onPress={handleNext}
-              gradient={gradients.primary}
-            />
-          )}
-          {!isHost && (
-            <Text style={[typography.small, { textAlign: "center", color: colors.textMuted, marginTop: spacing.sm }]}>
-              waiting for host to continue
-            </Text>
-          )}
+      {phase === "next" && (
+        <Animated.View key="next" entering={FadeIn.duration(300)} style={styles.footer}>
+          <SoftButton title="View Result Card" onPress={handleNext} />
+          <View style={{ height: spacing.md }} />
+          <SoftButton title="Continue" onPress={() => {}} variant="outline" />
         </Animated.View>
       )}
     </Screen>
@@ -268,91 +123,20 @@ export default function RevealScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    justifyContent: "center",
-  },
-  bgGlow: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  content: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingTop: spacing.massive,
-  },
-  roundIndicator: {
-    ...typography.small,
-    color: colors.textMuted,
-    letterSpacing: 4,
-    textAlign: "center",
-    marginBottom: spacing.md,
-  },
-  categoryText: {
-    ...typography.h1,
-    textAlign: "center",
-    lineHeight: 40,
-    paddingHorizontal: spacing.lg,
-  },
-  tensionDots: {
-    ...typography.display,
-    color: colors.primary,
-    textAlign: "center",
-    marginTop: spacing.xxxl,
-    letterSpacing: 8,
-  },
+  container: { justifyContent: "center" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.xl },
   winnerCard: {
-    marginTop: spacing.xxxl,
-    width: SCREEN_WIDTH - spacing.xl * 2 - spacing.xl * 2,
+    alignItems: "center",
+    paddingVertical: spacing.huge,
+    paddingHorizontal: spacing.xxxl,
+    backgroundColor: colors.card,
     borderRadius: radii.xl,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderWidth: 2,
+    ...shadow.lg,
   },
-  winnerGradient: {
-    padding: spacing.xxxl,
-    alignItems: "center",
-  },
-  winnerAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing.lg,
-  },
-  winnerAvatarText: {
-    color: "#0B0B0F",
-    fontSize: 32,
-    fontWeight: "800",
-  },
-  winnerName: {
-    ...typography.display,
-    fontSize: 28,
-    textAlign: "center",
-  },
-  voteCount: {
-    ...typography.h3,
-    color: colors.textSecondary,
-    marginTop: spacing.md,
-  },
-  runnerText: {
-    ...typography.small,
-    color: colors.textMuted,
-    marginTop: spacing.md,
-  },
-  commentary: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: "center",
-    marginTop: spacing.xxxl,
-    fontStyle: "italic",
-    paddingHorizontal: spacing.xxl,
-  },
-  footer: {
-    paddingBottom: spacing.xxxl,
-  },
+  winnerAvatar: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  winnerAvatarText: { color: "#FFF", fontSize: 28, fontWeight: "800" },
+  statRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm, width: "100%" },
+  statDot: { width: 12, height: 12, borderRadius: 6 },
+  footer: { paddingBottom: spacing.xxxl },
 });

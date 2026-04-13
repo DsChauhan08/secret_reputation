@@ -1,134 +1,147 @@
 import React from "react";
 import {
-  TouchableOpacity,
   Text,
   View,
   TextInput,
   StyleSheet,
-  ViewStyle,
-  TextStyle,
-  ActivityIndicator,
   Pressable,
+  ActivityIndicator,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import type { ViewStyle, TextStyle } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeInUp,
-  FadeOut,
-  SlideInRight,
-  ZoomIn,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withSequence,
-  withTiming,
-} from "react-native-reanimated";
-import { colors, gradients, spacing, radii, typography, PLAYER_COLORS } from "./theme";
+import { colors, spacing, radii, typography, shadow, PLAYER_COLORS } from "./theme";
 
 // ============================================================
-// GRADIENT BUTTON
+// SCREEN WRAPPER
 // ============================================================
 
-interface GradientButtonProps {
-  title: string;
-  onPress: () => void;
-  gradient?: readonly [string, string];
-  disabled?: boolean;
-  loading?: boolean;
-  size?: "sm" | "md" | "lg";
+interface ScreenProps {
+  children: React.ReactNode;
   style?: ViewStyle;
 }
 
-export function GradientButton({
-  title,
-  onPress,
-  gradient = gradients.primary,
-  disabled = false,
-  loading = false,
-  size = "lg",
-  style,
-}: GradientButtonProps) {
-  const scale = useSharedValue(1);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const handlePressIn = () => {
-    scale.value = withSpring(0.95, { damping: 15 });
-  };
-
-  const handlePressOut = () => {
-    scale.value = withSpring(1, { damping: 15 });
-  };
-
-  const handlePress = () => {
-    if (disabled || loading) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onPress();
-  };
-
-  const heights = { sm: 40, md: 48, lg: 56 };
-  const fontSizes = { sm: 14, md: 16, lg: 18 };
-
+export function Screen({ children, style }: ScreenProps) {
+  const insets = useSafeAreaInsets();
   return (
-    <Animated.View style={[animStyle, style]}>
-      <Pressable
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        onPress={handlePress}
-        disabled={disabled || loading}
-      >
-        <LinearGradient
-          colors={disabled ? [colors.surfaceLight, colors.surface] : [...gradient]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[
-            styles.gradientBtn,
-            { height: heights[size] },
-          ]}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.text} size="small" />
-          ) : (
-            <Text
-              style={[
-                styles.gradientBtnText,
-                {
-                  fontSize: fontSizes[size],
-                  color: disabled ? colors.textMuted : colors.text,
-                },
-              ]}
-            >
-              {title}
-            </Text>
-          )}
-        </LinearGradient>
-      </Pressable>
-    </Animated.View>
+    <View
+      style={[
+        styles.screen,
+        {
+          paddingTop: insets.top + spacing.md,
+          paddingBottom: insets.bottom + spacing.md,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
   );
 }
 
 // ============================================================
-// GLASS CARD (opacity-based, no blur dependency)
+// SOFT BUTTON (iOS-style, no gradient)
 // ============================================================
 
-interface GlassCardProps {
-  children: React.ReactNode;
+interface SoftButtonProps {
+  title: string;
+  onPress: () => void;
+  color?: string;
+  textColor?: string;
+  disabled?: boolean;
+  loading?: boolean;
+  variant?: "filled" | "outline" | "ghost";
+  size?: "sm" | "md" | "lg";
   style?: ViewStyle;
-  entering?: any;
 }
 
-export function GlassCard({ children, style, entering }: GlassCardProps) {
+export function SoftButton({
+  title,
+  onPress,
+  color = colors.primary,
+  textColor,
+  disabled = false,
+  loading = false,
+  variant = "filled",
+  size = "lg",
+  style,
+}: SoftButtonProps) {
+  const handlePress = () => {
+    if (disabled || loading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress();
+  };
+
+  const heights: Record<string, number> = { sm: 40, md: 44, lg: 50 };
+  const fontSizes: Record<string, number> = { sm: 14, md: 15, lg: 16 };
+
+  const bgColor =
+    variant === "filled"
+      ? disabled ? colors.divider : color
+      : "transparent";
+
+  const borderColor =
+    variant === "outline"
+      ? disabled ? colors.divider : color
+      : "transparent";
+
+  const labelColor =
+    textColor ??
+    (variant === "filled"
+      ? "#FFFFFF"
+      : disabled ? colors.textMuted : color);
+
   return (
-    <Animated.View
-      entering={entering}
-      style={[styles.glassCard, style]}
+    <Pressable
+      onPress={handlePress}
+      disabled={disabled || loading}
+      style={({ pressed }) => [
+        styles.softBtn,
+        {
+          height: heights[size],
+          backgroundColor: pressed && !disabled
+            ? variant === "filled" ? `${color}DD` : colors.overlay
+            : bgColor,
+          borderWidth: variant === "outline" ? 1.5 : 0,
+          borderColor,
+        },
+        variant === "filled" && !disabled && shadow.sm,
+        style,
+      ]}
     >
+      {loading ? (
+        <ActivityIndicator color={labelColor} size="small" />
+      ) : (
+        <Text
+          style={[
+            styles.softBtnText,
+            {
+              fontSize: fontSizes[size],
+              color: labelColor,
+            },
+          ]}
+        >
+          {title}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+// ============================================================
+// CARD
+// ============================================================
+
+interface CardProps {
+  children: React.ReactNode;
+  style?: ViewStyle;
+}
+
+export function Card({ children, style }: CardProps) {
+  return (
+    <View style={[styles.card, style]}>
       {children}
-    </Animated.View>
+    </View>
   );
 }
 
@@ -162,7 +175,7 @@ export function Input({
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}
-      placeholderTextColor={colors.textGhost}
+      placeholderTextColor={colors.textPlaceholder}
       maxLength={maxLength}
       autoCapitalize={autoCapitalize}
       autoFocus={autoFocus}
@@ -183,7 +196,6 @@ interface PlayerChipProps {
   selected?: boolean;
   onPress?: () => void;
   size?: "sm" | "md" | "lg";
-  entering?: any;
 }
 
 export function PlayerChip({
@@ -193,88 +205,63 @@ export function PlayerChip({
   selected = false,
   onPress,
   size = "md",
-  entering,
 }: PlayerChipProps) {
-  const scale = useSharedValue(1);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const handlePress = () => {
-    if (!onPress) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    scale.value = withSequence(
-      withSpring(0.9, { damping: 15 }),
-      withSpring(1, { damping: 15 })
-    );
-    onPress();
-  };
-
-  const sizes = {
-    sm: { avatar: 32, font: 12, pad: spacing.sm },
-    md: { avatar: 40, font: 14, pad: spacing.md },
-    lg: { avatar: 56, font: 16, pad: spacing.lg },
+  const sizes: Record<string, { avatar: number; font: number; pad: number }> = {
+    sm: { avatar: 30, font: 13, pad: spacing.sm },
+    md: { avatar: 38, font: 14, pad: spacing.md },
+    lg: { avatar: 48, font: 16, pad: spacing.lg },
   };
 
   const s = sizes[size];
 
   return (
-    <Animated.View entering={entering} style={animStyle}>
-      <Pressable
-        onPress={handlePress}
-        disabled={!onPress}
+    <Pressable
+      onPress={() => {
+        if (!onPress) return;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+      }}
+      disabled={!onPress}
+      style={({ pressed }) => [
+        styles.playerChip,
+        {
+          paddingHorizontal: s.pad,
+          paddingVertical: s.pad,
+          borderColor: selected ? color : colors.cardBorder,
+          backgroundColor: pressed ? colors.overlay : selected ? `${color}10` : colors.card,
+        },
+        shadow.sm,
+      ]}
+    >
+      <View
         style={[
-          styles.playerChip,
+          styles.avatar,
           {
-            paddingHorizontal: s.pad,
-            paddingVertical: s.pad - 2,
-            borderColor: selected ? color : colors.surfaceBorder,
-            backgroundColor: selected
-              ? `${color}15`
-              : colors.surface,
+            width: s.avatar,
+            height: s.avatar,
+            backgroundColor: color,
+            borderRadius: s.avatar / 2,
           },
         ]}
       >
-        <View
-          style={[
-            styles.avatar,
-            {
-              width: s.avatar,
-              height: s.avatar,
-              backgroundColor: color,
-              borderRadius: s.avatar / 2,
-            },
-          ]}
-        >
-          <Text style={[styles.avatarText, { fontSize: s.font }]}>
-            {name.charAt(0).toUpperCase()}
-          </Text>
-        </View>
-        <View style={{ marginLeft: spacing.sm, flex: 1 }}>
-          <Text
-            style={[
-              { fontSize: s.font, fontWeight: "600", color: colors.text },
-            ]}
-            numberOfLines={1}
-          >
-            {name}
-          </Text>
-          {isHost && (
-            <Text style={[typography.small, { color: colors.primary }]}>
-              HOST
-            </Text>
-          )}
-        </View>
-        {selected && (
-          <View style={[styles.checkMark, { backgroundColor: color }]}>
-            <Text style={{ color: colors.bg, fontWeight: "700", fontSize: 12 }}>
-              OK
-            </Text>
-          </View>
+        <Text style={[styles.avatarText, { fontSize: s.font }]}>
+          {name.charAt(0).toUpperCase()}
+        </Text>
+      </View>
+      <View style={{ marginLeft: spacing.md, flex: 1 }}>
+        <Text style={{ fontSize: s.font, fontWeight: "600", color: colors.text }} numberOfLines={1}>
+          {name}
+        </Text>
+        {isHost && (
+          <Text style={[typography.small, { color: colors.primary }]}>HOST</Text>
         )}
-      </Pressable>
-    </Animated.View>
+      </View>
+      {selected && (
+        <View style={[styles.checkMark, { backgroundColor: color }]}>
+          <Text style={{ color: "#fff", fontWeight: "600", fontSize: 11 }}>OK</Text>
+        </View>
+      )}
+    </Pressable>
   );
 }
 
@@ -303,7 +290,7 @@ export function ColorPicker({ selected, onSelect }: ColorPickerProps) {
               backgroundColor: c,
               borderWidth: selected === c ? 3 : 0,
               borderColor: colors.text,
-              transform: [{ scale: selected === c ? 1.2 : 1 }],
+              transform: [{ scale: selected === c ? 1.15 : 1 }],
             },
           ]}
         />
@@ -324,52 +311,26 @@ interface ModeCardProps {
   accentColor: string;
 }
 
-export function ModeCard({
-  title,
-  description,
-  selected,
-  onPress,
-  accentColor,
-}: ModeCardProps) {
-  const scale = useSharedValue(1);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
+export function ModeCard({ title, description, selected, onPress, accentColor }: ModeCardProps) {
   return (
-    <Animated.View style={animStyle}>
-      <Pressable
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          scale.value = withSequence(
-            withSpring(0.95, { damping: 15 }),
-            withSpring(1, { damping: 15 })
-          );
-          onPress();
-        }}
-        style={[
-          styles.modeCard,
-          {
-            borderColor: selected ? accentColor : colors.surfaceBorder,
-            backgroundColor: selected ? `${accentColor}10` : colors.surface,
-          },
-        ]}
-      >
-        <View
-          style={[
-            styles.modeDot,
-            { backgroundColor: accentColor },
-          ]}
-        />
-        <Text style={[typography.bodyBold, { marginTop: spacing.sm }]}>
-          {title}
-        </Text>
-        <Text style={[typography.small, { marginTop: spacing.xs }]}>
-          {description}
-        </Text>
-      </Pressable>
-    </Animated.View>
+    <Pressable
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+      }}
+      style={({ pressed }) => [
+        styles.modeCard,
+        {
+          borderColor: selected ? accentColor : colors.cardBorder,
+          backgroundColor: pressed ? colors.overlay : selected ? `${accentColor}08` : colors.card,
+        },
+        selected && shadow.sm,
+      ]}
+    >
+      <View style={[styles.modeDot, { backgroundColor: accentColor }]} />
+      <Text style={[typography.bodyBold, { marginTop: spacing.sm }]}>{title}</Text>
+      <Text style={[typography.small, { marginTop: spacing.xs }]}>{description}</Text>
+    </Pressable>
   );
 }
 
@@ -381,42 +342,32 @@ interface CategoryCardProps {
   text: string;
   selected: boolean;
   onPress: () => void;
-  entering?: any;
 }
 
-export function CategoryCard({ text, selected, onPress, entering }: CategoryCardProps) {
+export function CategoryCard({ text, selected, onPress }: CategoryCardProps) {
   return (
-    <Animated.View entering={entering}>
-      <Pressable
-        onPress={() => {
-          Haptics.selectionAsync();
-          onPress();
-        }}
-        style={[
-          styles.categoryCard,
-          {
-            borderColor: selected ? colors.primary : colors.surfaceBorder,
-            backgroundColor: selected ? `${colors.primary}15` : colors.surface,
-          },
-        ]}
-      >
-        <Text
-          style={[
-            typography.caption,
-            {
-              color: selected ? colors.text : colors.textSecondary,
-            },
-          ]}
-        >
-          {text}
-        </Text>
-      </Pressable>
-    </Animated.View>
+    <Pressable
+      onPress={() => {
+        Haptics.selectionAsync();
+        onPress();
+      }}
+      style={({ pressed }) => [
+        styles.categoryCard,
+        {
+          borderColor: selected ? colors.primary : colors.cardBorder,
+          backgroundColor: pressed ? colors.overlay : selected ? `${colors.primary}08` : colors.card,
+        },
+      ]}
+    >
+      <Text style={[typography.caption, { color: selected ? colors.text : colors.textSecondary }]}>
+        {text}
+      </Text>
+    </Pressable>
   );
 }
 
 // ============================================================
-// PROGRESS RING (simple)
+// PROGRESS RING (simple text-based)
 // ============================================================
 
 interface ProgressRingProps {
@@ -426,66 +377,11 @@ interface ProgressRingProps {
 }
 
 export function ProgressRing({ current, total, size = 80 }: ProgressRingProps) {
-  const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
-
   return (
-    <View style={[styles.progressRing, { width: size, height: size }]}>
-      <View
-        style={[
-          styles.progressRingInner,
-          {
-            width: size - 8,
-            height: size - 8,
-            borderRadius: (size - 8) / 2,
-          },
-        ]}
-      >
-        <Text style={[typography.h3, { color: colors.primary }]}>
-          {current}/{total}
-        </Text>
-      </View>
-      <View
-        style={[
-          styles.progressRingFill,
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            borderColor: colors.primary,
-            borderTopColor: percentage >= 25 ? colors.primary : colors.surfaceBorder,
-            borderRightColor: percentage >= 50 ? colors.primary : colors.surfaceBorder,
-            borderBottomColor: percentage >= 75 ? colors.primary : colors.surfaceBorder,
-            borderLeftColor: percentage >= 100 ? colors.primary : colors.surfaceBorder,
-          },
-        ]}
-      />
-    </View>
-  );
-}
-
-// ============================================================
-// SCREEN WRAPPER
-// ============================================================
-
-interface ScreenProps {
-  children: React.ReactNode;
-  style?: ViewStyle;
-}
-
-export function Screen({ children, style }: ScreenProps) {
-  const insets = require("react-native-safe-area-context").useSafeAreaInsets();
-  return (
-    <View
-      style={[
-        styles.screen,
-        {
-          paddingTop: insets.top + spacing.sm,
-          paddingBottom: insets.bottom + spacing.sm,
-        },
-        style,
-      ]}
-    >
-      {children}
+    <View style={[styles.progressRing, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Text style={[typography.h3, { color: colors.primary }]}>
+        {current}/{total}
+      </Text>
     </View>
   );
 }
@@ -501,35 +397,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
 
-  gradientBtn: {
+  softBtn: {
     borderRadius: radii.lg,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.xxl,
   },
-  gradientBtnText: {
-    fontWeight: "700",
-    letterSpacing: 0.5,
+  softBtnText: {
+    fontWeight: "600",
+    letterSpacing: 0.3,
   },
 
-  glassCard: {
-    backgroundColor: `${colors.surfaceLight}90`,
+  card: {
+    backgroundColor: colors.card,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: colors.cardBorder,
     padding: spacing.lg,
+    ...shadow.sm,
   },
 
   input: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.card,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: colors.cardBorder,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     fontSize: 16,
     color: colors.text,
-    height: 52,
+    height: 50,
   },
 
   playerChip: {
@@ -543,13 +440,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   avatarText: {
-    color: colors.bg,
-    fontWeight: "800",
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
   checkMark: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -561,9 +458,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   colorDot: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
   },
 
   modeCard: {
@@ -573,9 +470,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modeDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
 
   categoryCard: {
@@ -588,17 +485,7 @@ const styles = StyleSheet.create({
   progressRing: {
     alignItems: "center",
     justifyContent: "center",
-    position: "relative",
-  },
-  progressRingInner: {
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.bg,
-    position: "absolute",
-    zIndex: 1,
-  },
-  progressRingFill: {
-    borderWidth: 4,
-    position: "absolute",
+    borderWidth: 3,
+    borderColor: colors.primary,
   },
 });

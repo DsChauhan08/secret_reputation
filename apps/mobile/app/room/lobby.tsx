@@ -1,21 +1,9 @@
 import React, { useEffect } from "react";
 import { View, Text, StyleSheet, FlatList, Share, Pressable } from "react-native";
 import { useRouter } from "expo-router";
-import Animated, {
-  FadeInDown,
-  FadeIn,
-  FadeInRight,
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withSequence,
-  withTiming,
-  Easing,
-} from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import { Screen, GradientButton, PlayerChip, GlassCard } from "../../src/components";
-import { colors, gradients, typography, spacing, radii } from "../../src/theme";
+import { Screen, SoftButton, PlayerChip, Card } from "../../src/components";
+import { colors, typography, spacing } from "../../src/theme";
 import { useGameStore } from "../../src/store";
 
 export default function LobbyScreen() {
@@ -26,36 +14,14 @@ export default function LobbyScreen() {
   const isHost = room?.hostId === playerId;
   const canStart = (room?.players.length ?? 0) >= 3;
 
-  // Pulse animation for waiting state
-  const pulse = useSharedValue(1);
   useEffect(() => {
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(1.05, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      false
-    );
-  }, []);
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulse.value }],
-  }));
-
-  // Navigate to categories when host starts
-  useEffect(() => {
-    if (room?.status === "voting") {
-      router.replace("/room/vote");
-    }
+    if (room?.status === "voting") router.replace("/room/vote");
   }, [room?.status]);
 
   const handleShare = async () => {
     if (!room) return;
     try {
-      await Share.share({
-        message: `Join my Secret Reputation room!\n\nRoom code: ${room.code}\n\nDownload the app and enter the code to join.`,
-      });
+      await Share.share({ message: `Join my Secret Reputation room! Code: ${room.code}` });
     } catch {}
   };
 
@@ -67,92 +33,64 @@ export default function LobbyScreen() {
 
   if (!room) return null;
 
+  const modeColors: Record<string, string> = {
+    "light-roast": "#845EC2",
+    "normal-chaos": "#4B4453",
+    "unhinged": "#C34A36",
+  };
+
   return (
     <Screen>
-      <View style={styles.header}>
-        <Animated.View entering={FadeInDown.duration(400).delay(100)}>
-          <Text style={[typography.small, { color: colors.textMuted, letterSpacing: 2 }]}>
-            ROOM
-          </Text>
-          <Text style={[typography.h2, { marginTop: spacing.xs }]}>
-            {room.name}
-          </Text>
-        </Animated.View>
+      <View style={{ paddingTop: spacing.lg }}>
+        <Text style={[typography.small, { color: colors.textMuted, letterSpacing: 1.5 }]}>ROOM</Text>
+        <Text style={[typography.h2, { marginTop: spacing.xs }]}>{room.name}</Text>
 
-        {/* Room Code */}
-        <Animated.View entering={FadeInDown.duration(400).delay(200)}>
-          <Pressable onPress={handleShare}>
-            <GlassCard style={styles.codeCard}>
-              <Text style={[typography.small, { color: colors.textMuted, letterSpacing: 2, textAlign: "center" }]}>
-                ROOM CODE
-              </Text>
-              <Text style={styles.codeText}>{room.code}</Text>
-              <Text style={[typography.small, { color: colors.primary, textAlign: "center", marginTop: spacing.xs }]}>
-                TAP TO SHARE
-              </Text>
-            </GlassCard>
-          </Pressable>
-        </Animated.View>
+        <Pressable onPress={handleShare}>
+          <Card style={styles.codeCard}>
+            <Text style={[typography.small, { color: colors.textMuted, textAlign: "center", letterSpacing: 1.5 }]}>ROOM CODE</Text>
+            <Text style={styles.codeText}>{room.code}</Text>
+            <Text style={[typography.small, { color: colors.primary, textAlign: "center", marginTop: spacing.xs }]}>tap to share</Text>
+          </Card>
+        </Pressable>
 
-        {/* Room Mode Badge */}
-        <Animated.View entering={FadeIn.duration(400).delay(300)} style={styles.modeBadge}>
-          <View style={[styles.modeDot, {
-            backgroundColor: room.mode === "light-roast" ? "#F59E0B"
-              : room.mode === "unhinged" ? "#F43F5E" : "#8B5CF6"
-          }]} />
+        <View style={styles.modeBadge}>
+          <View style={[styles.modeDot, { backgroundColor: modeColors[room.mode] ?? colors.primary }]} />
           <Text style={[typography.small, { color: colors.textSecondary, marginLeft: spacing.sm }]}>
-            {room.mode.toUpperCase().replace("-", " ")}
+            {room.mode.replace("-", " ")}
           </Text>
-        </Animated.View>
+        </View>
       </View>
 
-      {/* Player Count */}
-      <Animated.View entering={FadeIn.duration(400).delay(400)} style={styles.countRow}>
-        <Text style={[typography.bodyBold]}>
-          {room.players.length} player{room.players.length !== 1 ? "s" : ""}
-        </Text>
-        <Animated.View style={pulseStyle}>
-          <View style={styles.liveDot} />
-        </Animated.View>
-        <Text style={[typography.small, { color: colors.textMuted }]}>
-          waiting for players
-        </Text>
-      </Animated.View>
+      <View style={styles.countRow}>
+        <Text style={typography.bodyBold}>{room.players.length} player{room.players.length !== 1 ? "s" : ""}</Text>
+        <View style={styles.liveDot} />
+        <Text style={[typography.small, { color: colors.textMuted }]}>waiting</Text>
+      </View>
 
-      {/* Player List */}
       <FlatList
         data={room.players}
         keyExtractor={(p) => p.id}
-        style={styles.playerList}
+        style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: spacing.huge }}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item, index }) => (
+        renderItem={({ item }) => (
           <View style={{ marginBottom: spacing.sm }}>
-            <PlayerChip
-              name={item.name}
-              color={item.color}
-              isHost={item.id === room.hostId}
-              entering={FadeInRight.duration(300).delay(index * 80)}
-            />
+            <PlayerChip name={item.name} color={item.color} isHost={item.id === room.hostId} />
           </View>
         )}
       />
 
-      {/* Footer */}
-      <View style={styles.footer}>
+      <View style={{ paddingBottom: spacing.xxxl }}>
         {isHost ? (
-          <GradientButton
-            title={canStart ? "CHOOSE CATEGORIES" : `NEED ${3 - room.players.length} MORE`}
+          <SoftButton
+            title={canStart ? "Choose Categories" : `Need ${3 - room.players.length} more`}
             onPress={handleStart}
             disabled={!canStart}
-            gradient={canStart ? gradients.primary : gradients.dark}
           />
         ) : (
-          <Animated.View style={pulseStyle}>
-            <Text style={[typography.caption, { textAlign: "center", color: colors.textMuted }]}>
-              waiting for host to start the game
-            </Text>
-          </Animated.View>
+          <Text style={[typography.caption, { textAlign: "center", color: colors.textMuted }]}>
+            waiting for host to start
+          </Text>
         )}
       </View>
     </Screen>
@@ -160,49 +98,10 @@ export default function LobbyScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    paddingTop: spacing.massive,
-  },
-  codeCard: {
-    marginTop: spacing.xl,
-    alignItems: "center",
-    paddingVertical: spacing.xl,
-  },
-  codeText: {
-    fontSize: 36,
-    fontWeight: "800",
-    color: colors.text,
-    letterSpacing: 10,
-    marginTop: spacing.sm,
-  },
-  modeBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "center",
-    marginTop: spacing.lg,
-  },
-  modeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  countRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginTop: spacing.xxl,
-    marginBottom: spacing.lg,
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.accent,
-  },
-  playerList: {
-    flex: 1,
-  },
-  footer: {
-    paddingBottom: spacing.xxxl,
-  },
+  codeCard: { marginTop: spacing.xl, alignItems: "center", paddingVertical: spacing.xl },
+  codeText: { fontSize: 32, fontWeight: "800", color: colors.text, letterSpacing: 8, marginTop: spacing.sm },
+  modeBadge: { flexDirection: "row", alignItems: "center", alignSelf: "center", marginTop: spacing.lg },
+  modeDot: { width: 8, height: 8, borderRadius: 4 },
+  countRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.xxl, marginBottom: spacing.lg },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#00C9A7" },
 });

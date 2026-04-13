@@ -2,40 +2,27 @@ import { Platform, Dimensions } from "react-native";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 export { SCREEN_WIDTH, SCREEN_HEIGHT };
-// System font: San Francisco on iOS, Roboto on Android
-const FONT_FAMILY = Platform.OS === "ios" ? "System" : "Roboto";
+
+const FONT = Platform.OS === "ios" ? "System" : "Roboto";
 
 export const colors = {
-  bg: "#0B0B0F",
-  surface: "#14141A",
-  surfaceLight: "#1E1E28",
-  surfaceBorder: "#2A2A36",
+  bg: "#FAFAFA",
+  card: "#FFFFFF",
+  cardBorder: "#EDEDED",
 
-  primary: "#8B5CF6",
-  primaryLight: "#A78BFA",
-  primaryDark: "#7C3AED",
+  primary: "#845EC2",
+  dark: "#4B4453",
+  muted: "#B0A8B9",
+  danger: "#C34A36",
+  warm: "#FF8066",
 
-  accent: "#06F5C1",
-  accentDark: "#05C99E",
+  text: "#1A1A2E",
+  textSecondary: "#4B4453",
+  textMuted: "#B0A8B9",
+  textPlaceholder: "#C8C2CC",
 
-  danger: "#F43F5E",
-  dangerDark: "#E11D48",
-
-  warning: "#F59E0B",
-
-  text: "#FFFFFF",
-  textSecondary: "#9CA3AF",
-  textMuted: "#6B7280",
-  textGhost: "#374151",
-} as const;
-
-export const gradients = {
-  primary: ["#8B5CF6", "#6D28D9"] as const,
-  accent: ["#06F5C1", "#059669"] as const,
-  danger: ["#F43F5E", "#E11D48"] as const,
-  dark: ["#1E1E28", "#0B0B0F"] as const,
-  reveal: ["#8B5CF6", "#F43F5E"] as const,
-  surface: ["#14141A", "#0B0B0F"] as const,
+  divider: "#E8E4EC",
+  overlay: "rgba(0,0,0,0.04)",
 } as const;
 
 export const spacing = {
@@ -47,7 +34,7 @@ export const spacing = {
   xxl: 24,
   xxxl: 32,
   huge: 48,
-  massive: 64,
+  massive: 56,
 } as const;
 
 export const radii = {
@@ -58,57 +45,80 @@ export const radii = {
   full: 9999,
 } as const;
 
+export const shadow = {
+  sm: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  md: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  lg: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+} as const;
+
 export const typography = {
   display: {
-    fontSize: 40,
-    fontWeight: "800" as const,
-    letterSpacing: -1.5,
-    color: colors.text,
-    fontFamily: FONT_FAMILY,
-  },
-  h1: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: "700" as const,
-    letterSpacing: -1,
-    color: colors.text,
-    fontFamily: FONT_FAMILY,
-  },
-  h2: {
-    fontSize: 24,
-    fontWeight: "600" as const,
     letterSpacing: -0.5,
     color: colors.text,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT,
   },
-  h3: {
-    fontSize: 20,
+  h1: {
+    fontSize: 28,
+    fontWeight: "700" as const,
+    letterSpacing: -0.3,
+    color: colors.text,
+    fontFamily: FONT,
+  },
+  h2: {
+    fontSize: 22,
     fontWeight: "600" as const,
     color: colors.text,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT,
+  },
+  h3: {
+    fontSize: 18,
+    fontWeight: "600" as const,
+    color: colors.text,
+    fontFamily: FONT,
   },
   body: {
     fontSize: 16,
     fontWeight: "400" as const,
     color: colors.text,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT,
   },
   bodyBold: {
     fontSize: 16,
     fontWeight: "600" as const,
     color: colors.text,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT,
   },
   caption: {
     fontSize: 14,
     fontWeight: "400" as const,
     color: colors.textSecondary,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT,
   },
   small: {
     fontSize: 12,
     fontWeight: "400" as const,
     color: colors.textMuted,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT,
   },
   mono: {
     fontSize: 28,
@@ -120,16 +130,16 @@ export const typography = {
 } as const;
 
 export const PLAYER_COLORS = [
-  "#8B5CF6",
-  "#06F5C1",
-  "#F43F5E",
-  "#F59E0B",
-  "#3B82F6",
-  "#10B981",
-  "#EC4899",
-  "#F97316",
-  "#14B8A6",
-  "#6366F1",
-  "#EF4444",
-  "#84CC16",
+  "#845EC2",
+  "#FF8066",
+  "#C34A36",
+  "#4B4453",
+  "#00C9A7",
+  "#FF6F91",
+  "#FFC75F",
+  "#5B5EA6",
+  "#9B89B3",
+  "#F9F871",
+  "#0089BA",
+  "#D65DB1",
 ] as const;
