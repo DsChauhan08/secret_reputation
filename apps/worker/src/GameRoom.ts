@@ -326,7 +326,7 @@ export class GameRoom implements DurableObject {
       this.sendTo(ws, { type: "ERROR", payload: { message: "Game already in progress" } });
       return;
     }
-    if (this.room.players.length >= 20) {
+    if (this.room.players.length >= 10) {
       this.sendTo(ws, { type: "ERROR", payload: { message: "Room is full" } });
       return;
     }

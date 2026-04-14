@@ -58,8 +58,11 @@ export default function CategoriesScreen() {
 
   const handleStart = () => {
     wsClient.send({ type: "START_GAME", payload: { selectedCategoryIds: Array.from(selected) } });
-    router.replace("/room/vote");
   };
+
+  useEffect(() => {
+    if (room?.status === "voting") router.replace("/room/vote");
+  }, [room?.status]);
 
   if (!room) return null;
 

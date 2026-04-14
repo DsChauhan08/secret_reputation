@@ -24,6 +24,11 @@ export default function VoteScreen() {
     if (room?.status === "ended") router.replace("/room/end");
   }, [room?.status]);
 
+  useEffect(() => {
+    setVotedFor(null);
+    setLocked(false);
+  }, [room?.currentRound]);
+
   const handleVote = () => {
     if (!votedFor || locked || !currentCategory) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

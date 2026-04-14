@@ -11,5 +11,6 @@
       "@shared/*": ["../../packages/shared/src/*"]
     }
   },
-  "include": ["src/**/*.ts", "../../packages/shared/src/**/*.ts"]
+  "include": ["src/**/*.ts", "../../packages/shared/src/**/*.ts"],
+  "exclude": ["src/e2e-test.ts"]
 }

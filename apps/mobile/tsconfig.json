@@ -30,6 +30,7 @@
   "exclude": [
     "node_modules",
     "metro.config.js",
+    "app.config.ts",
     "android",
     "ios",
     "../../packages/shared/src/tests.ts"
