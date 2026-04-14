@@ -9,7 +9,7 @@
     ],
     "module": "ESNext",
     "moduleDetection": "force",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "noEmit": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
@@ -29,7 +29,6 @@
   ],
   "exclude": [
     "node_modules",
-    "babel.config.js",
     "metro.config.js",
     "android",
     "ios",
