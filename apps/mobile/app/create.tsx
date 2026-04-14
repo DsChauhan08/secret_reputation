@@ -28,7 +28,7 @@ export default function CreateRoomScreen() {
   const handleCreate = async () => {
     if (!canCreate) return;
 
-    // Save identity to store
+   
     setPlayerName(name.trim());
     setPlayerColor(selectedColor);
 
@@ -72,7 +72,7 @@ export default function CreateRoomScreen() {
           set up your identity and pick a vibe
         </Text>
 
-        {/* Identity */}
+        {}
         <Text style={styles.label}>YOUR NAME</Text>
         <Input
           value={name}
@@ -85,7 +85,7 @@ export default function CreateRoomScreen() {
         <Text style={styles.label}>YOUR COLOR</Text>
         <ColorPicker selected={selectedColor} onSelect={setSelectedColor} />
 
-        {/* Room settings */}
+        {}
         <Text style={styles.label}>ROOM NAME</Text>
         <Input
           value={roomName}

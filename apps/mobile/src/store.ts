@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { PLAYER_COLORS } from "./theme";
 
-// Inline the types we need so the IDE never chokes on module resolution
 type RoomMode = "light-roast" | "normal-chaos" | "unhinged";
 type GameStatus = "lobby" | "voting" | "revealing" | "ended";
 
@@ -72,7 +71,6 @@ type ServerEvent =
   | { type: "ROOM_STATE"; payload: { room: Room } }
   | { type: "ERROR"; payload: { message: string } };
 
-// Re-export for other files that import from store
 export type { Room, Player, RoundResult, GameStatus, RoomMode, ServerEvent };
 
 interface GameState {
@@ -188,7 +186,6 @@ export const useGameStore = create<GameState>()((set, get) => ({
   reset: () => set(initialState),
 }));
 
-// Handle server events — called by WebSocket client
 export function handleServerEvent(event: ServerEvent): void {
   const store = useGameStore.getState();
 

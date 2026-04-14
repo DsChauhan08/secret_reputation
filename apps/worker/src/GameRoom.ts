@@ -1,6 +1,4 @@
-// ============================================================
-// TYPES (inlined from shared to avoid cross-package issues)
-// ============================================================
+
 
 type RoomMode = "light-roast" | "normal-chaos" | "unhinged";
 type GameStatus = "lobby" | "voting" | "revealing" | "ended";
@@ -87,9 +85,6 @@ type ServerEvent =
   | { type: "ROOM_STATE"; payload: { room: Room } }
   | { type: "ERROR"; payload: { message: string } };
 
-// ============================================================
-// CATEGORIES (inlined)
-// ============================================================
 
 const ALL_CATEGORIES: Category[] = [
   { id: "lr_01", text: "most likely to still be texting their ex", mode: "light-roast", isCustom: false },
@@ -156,9 +151,6 @@ function getCategoriesByMode(mode: RoomMode): Category[] {
   }
 }
 
-// ============================================================
-// COMMENTARY (inlined)
-// ============================================================
 
 const COMMENTARY_UNANIMOUS = [
   "Zero hesitation from the entire group.",
@@ -191,9 +183,6 @@ function generateCommentary(result: RoundResult): string {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-// ============================================================
-// GAME ROOM DURABLE OBJECT
-// ============================================================
 
 interface SessionInfo {
   playerId: string;
@@ -230,14 +219,14 @@ export class GameRoom implements DurableObject {
       }), { headers: { "Content-Type": "application/json" } });
     }
 
-    // WebSocket upgrade — code comes from query param
+   
     const roomCode = url.searchParams.get("code") ?? "UNKNOWN";
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
     this.state.acceptWebSocket(server);
 
-    // Store the room code on the session so CREATE_ROOM can use it
+   
     const session: SessionInfo & { roomCode?: string } = { playerId: "", roomCode };
     this.sessions.set(server, session);
     server.serializeAttachment(session);
@@ -292,7 +281,7 @@ export class GameRoom implements DurableObject {
   private handleCreateRoom(ws: WebSocket, payload: { playerName: string; playerColor: string; roomName: string; mode: RoomMode }) {
     const playerId = this.generateId();
 
-    // Get room code from the session (passed via URL)
+   
     const sessionData = ws.deserializeAttachment() as SessionInfo & { roomCode?: string } | null;
     const code = sessionData?.roomCode ?? this.state.id.toString().slice(-6).toUpperCase();
 

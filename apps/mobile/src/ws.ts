@@ -12,12 +12,12 @@ type ClientEvent =
   | { type: "KICK_PLAYER"; payload: { playerId: string } };
 
 function getWsUrl(): string {
-  // Read from expo config (set via EXPO_PUBLIC_WS_URL env var)
+ 
   const fromEnv = (Constants.expoConfig?.extra as Record<string, string> | undefined)?.wsUrl;
   if (fromEnv && fromEnv.startsWith("wss://")) return fromEnv;
   if (fromEnv && fromEnv.startsWith("ws://")) return fromEnv;
 
-  // Fallback for local dev — override this when deploying
+ 
   return "ws://localhost:8787";
 }
 
@@ -52,7 +52,7 @@ class WebSocketClient {
         const url = `${WS_BASE_URL}/api/rooms/${sanitizedCode}/ws`;
         this.ws = new WebSocket(url);
 
-        // Connection timeout
+       
         const timeout = setTimeout(() => {
           if (this.ws && this.ws.readyState !== WebSocket.OPEN) {
             this.ws.close();
@@ -74,7 +74,7 @@ class WebSocketClient {
             const serverEvent: ServerEvent = JSON.parse(event.data as string);
             handleServerEvent(serverEvent);
           } catch {
-            // Silently ignore malformed messages
+           
           }
         };
 
@@ -101,7 +101,7 @@ class WebSocketClient {
   send(event: ClientEvent): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-    // Sanitize string fields in payload
+   
     const sanitized = { ...event };
     if ("payload" in sanitized && typeof sanitized.payload === "object") {
       const p = { ...sanitized.payload } as Record<string, unknown>;

@@ -1,5 +1,4 @@
-// Local re-exports of shared logic for IDE compatibility
-// These mirror packages/shared/src but live inside the mobile app
+
 
 import type { RoomMode } from "./store";
 
@@ -11,7 +10,7 @@ export interface Category {
 }
 
 const ALL_CATEGORIES: Category[] = [
-  // LIGHT ROAST
+ 
   { id: "lr_01", text: "most likely to still be texting their ex", mode: "light-roast", isCustom: false },
   { id: "lr_02", text: "most likely to cry at a movie trailer", mode: "light-roast", isCustom: false },
   { id: "lr_03", text: "most likely to ghost a group chat", mode: "light-roast", isCustom: false },
@@ -30,7 +29,7 @@ const ALL_CATEGORIES: Category[] = [
   { id: "lr_16", text: "most likely to bring snacks to every occasion", mode: "light-roast", isCustom: false },
   { id: "lr_17", text: "most likely to laugh at their own joke before finishing it", mode: "light-roast", isCustom: false },
 
-  // NORMAL CHAOS
+ 
   { id: "nc_01", text: "most likely to start a fight at a wedding", mode: "normal-chaos", isCustom: false },
   { id: "nc_02", text: "most likely to get banned from a group chat", mode: "normal-chaos", isCustom: false },
   { id: "nc_03", text: "most likely to lie on their resume", mode: "normal-chaos", isCustom: false },
@@ -53,7 +52,7 @@ const ALL_CATEGORIES: Category[] = [
   { id: "nc_20", text: "most likely to create chaos and watch from the sidelines", mode: "normal-chaos", isCustom: false },
   { id: "nc_21", text: "most likely to have a backup friend group", mode: "normal-chaos", isCustom: false },
 
-  // UNHINGED
+ 
   { id: "un_01", text: "most likely to fake their own death for attention", mode: "unhinged", isCustom: false },
   { id: "un_02", text: "most likely to start a cult accidentally", mode: "unhinged", isCustom: false },
   { id: "un_03", text: "most likely to end up on a true crime podcast", mode: "unhinged", isCustom: false },

@@ -34,12 +34,12 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }
 
-    // Health check
+   
     if (path === "/" || path === "/health") {
       return jsonResponse({ status: "ok" });
     }
 
-    // GET /api/rooms/:code/ws — WebSocket upgrade
+   
     const wsMatch = path.match(/^\/api\/rooms\/([A-Z0-9]{4,6})\/ws$/i);
     if (wsMatch) {
       const code = wsMatch[1].toUpperCase();
@@ -50,13 +50,13 @@ export default {
 
       const id = roomIdFromCode(env, code);
       const stub = env.GAME_ROOM.get(id);
-      // Forward with room code in the URL so the DO knows it
+     
       return stub.fetch(new Request(`http://internal/ws?code=${code}`, {
         headers: request.headers,
       }));
     }
 
-    // GET /api/rooms/:code — check room status
+   
     const checkMatch = path.match(/^\/api\/rooms\/([A-Z0-9]{4,6})$/i);
     if (checkMatch) {
       const code = checkMatch[1].toUpperCase();

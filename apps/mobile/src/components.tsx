@@ -12,9 +12,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radii, typography, shadow, PLAYER_COLORS } from "./theme";
 
-// ============================================================
-// SCREEN WRAPPER
-// ============================================================
 
 interface ScreenProps {
   children: React.ReactNode;
@@ -39,9 +36,6 @@ export function Screen({ children, style }: ScreenProps) {
   );
 }
 
-// ============================================================
-// SOFT BUTTON (iOS-style, no gradient)
-// ============================================================
 
 interface SoftButtonProps {
   title: string;
@@ -128,9 +122,6 @@ export function SoftButton({
   );
 }
 
-// ============================================================
-// CARD
-// ============================================================
 
 interface CardProps {
   children: React.ReactNode;
@@ -145,9 +136,6 @@ export function Card({ children, style }: CardProps) {
   );
 }
 
-// ============================================================
-// TEXT INPUT
-// ============================================================
 
 interface InputProps {
   value: string;
@@ -185,9 +173,6 @@ export function Input({
   );
 }
 
-// ============================================================
-// PLAYER CHIP
-// ============================================================
 
 interface PlayerChipProps {
   name: string;
@@ -265,9 +250,6 @@ export function PlayerChip({
   );
 }
 
-// ============================================================
-// COLOR PICKER
-// ============================================================
 
 interface ColorPickerProps {
   selected: string;
@@ -299,9 +281,6 @@ export function ColorPicker({ selected, onSelect }: ColorPickerProps) {
   );
 }
 
-// ============================================================
-// MODE CARD
-// ============================================================
 
 interface ModeCardProps {
   title: string;
@@ -334,9 +313,6 @@ export function ModeCard({ title, description, selected, onPress, accentColor }:
   );
 }
 
-// ============================================================
-// CATEGORY CARD
-// ============================================================
 
 interface CategoryCardProps {
   text: string;
@@ -366,9 +342,6 @@ export function CategoryCard({ text, selected, onPress }: CategoryCardProps) {
   );
 }
 
-// ============================================================
-// PROGRESS RING (simple text-based)
-// ============================================================
 
 interface ProgressRingProps {
   current: number;
@@ -386,9 +359,6 @@ export function ProgressRing({ current, total, size = 80 }: ProgressRingProps) {
   );
 }
 
-// ============================================================
-// STYLES
-// ============================================================
 
 const styles = StyleSheet.create({
   screen: {
