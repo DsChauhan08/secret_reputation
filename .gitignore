@@ -9,3 +9,8 @@ dist/
 *.ipa
 .DS_Store
 .chroma-data/
+
+# Secrets — never commit
+.env
+.env.local
+.env.production
