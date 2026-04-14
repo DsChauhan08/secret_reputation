@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { Screen, SoftButton, Input, ModeCard, Card } from "../src/components";
 import { colors, typography, spacing } from "../src/theme";
@@ -20,21 +20,34 @@ export default function CreateRoomScreen() {
   const [mode, setMode] = useState<RoomMode>("normal-chaos");
   const [loading, setLoading] = useState(false);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!playerName.trim()) {
       router.push("/join?needName=1&returnTo=create");
       return;
     }
     setLoading(true);
-    wsClient.send({
-      type: "CREATE_ROOM",
-      payload: {
-        playerName: playerName.trim(),
-        playerColor,
-        roomName: roomName.trim() || `Room ${Math.floor(Math.random() * 9000) + 1000}`,
-        mode,
-      },
-    });
+    try {
+      // Generate a temporary room code to connect
+      const tempCode = Array.from({ length: 6 }, () =>
+        "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 31)]
+      ).join("");
+
+      await wsClient.connect(tempCode);
+      wsClient.send({
+        type: "CREATE_ROOM",
+        payload: {
+          playerName: playerName.trim(),
+          playerColor,
+          roomName: roomName.trim() || `Room ${Math.floor(Math.random() * 9000) + 1000}`,
+          mode,
+        },
+      });
+      // Navigation happens when ROOM_CREATED event arrives via store
+      router.replace("/room/lobby");
+    } catch (err) {
+      setLoading(false);
+      Alert.alert("Connection Failed", "Could not reach the server. Make sure the backend is running.");
+    }
   };
 
   return (

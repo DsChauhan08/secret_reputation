@@ -322,7 +322,7 @@ export function ModeCard({ title, description, selected, onPress, accentColor }:
         styles.modeCard,
         {
           borderColor: selected ? accentColor : colors.cardBorder,
-          backgroundColor: pressed ? colors.overlay : selected ? `${accentColor}08` : colors.card,
+          backgroundColor: pressed ? colors.overlay : selected ? `${accentColor}15` : colors.card,
         },
         selected && shadow.sm,
       ]}

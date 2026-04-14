@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Alert } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Screen, SoftButton, Input, ColorPicker } from "../src/components";
 import { colors, typography, spacing } from "../src/theme";
@@ -29,15 +29,22 @@ export default function JoinRoomScreen() {
     }
 
     if (!code.trim() || code.trim().length < 4) return;
+
     setLoading(true);
     try {
       await wsClient.connect(code.trim().toUpperCase());
       wsClient.send({
         type: "JOIN_ROOM",
-        payload: { code: code.trim().toUpperCase(), playerName: name.trim(), playerColor: selectedColor },
+        payload: {
+          code: code.trim().toUpperCase(),
+          playerName: name.trim(),
+          playerColor: selectedColor,
+        },
       });
-    } catch {
+      router.replace("/room/lobby");
+    } catch (err) {
       setLoading(false);
+      Alert.alert("Connection Failed", "Could not join the room. Check the code and try again.");
     }
   };
 

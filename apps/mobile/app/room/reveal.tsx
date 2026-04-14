@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Animated } from "react-native";
 import { useRouter } from "expo-router";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Screen, SoftButton, Card } from "../../src/components";
 import { colors, typography, spacing, radii, shadow } from "../../src/theme";
@@ -13,21 +12,21 @@ export default function RevealScreen() {
   const router = useRouter();
   const room = useGameStore((s) => s.room);
   const [phase, setPhase] = useState<RevealPhase>("category");
+  const [fadeAnim] = useState(() => new Animated.Value(0));
 
   const latestResult = room?.results?.[room.results.length - 1];
+
+  const fadeIn = () => {
+    fadeAnim.setValue(0);
+    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+  };
 
   useEffect(() => {
     if (!latestResult) return;
 
     const timings: Record<RevealPhase, number> = {
-      category: 2000,
-      countdown: 1500,
-      winner: 3000,
-      commentary: 2500,
-      stats: 3000,
-      next: 0,
+      category: 2000, countdown: 1500, winner: 3000, commentary: 2500, stats: 3000, next: 0,
     };
-
     const sequence: RevealPhase[] = ["category", "countdown", "winner", "commentary", "stats", "next"];
     let i = 0;
     let timer: ReturnType<typeof setTimeout>;
@@ -37,12 +36,14 @@ export default function RevealScreen() {
       timer = setTimeout(() => {
         i++;
         setPhase(sequence[i]);
+        fadeIn();
         if (sequence[i] === "winner") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         advance();
       }, timings[sequence[i]]);
     };
 
     setPhase("category");
+    fadeIn();
     advance();
     return () => clearTimeout(timer);
   }, [latestResult?.categoryId]);
@@ -56,28 +57,24 @@ export default function RevealScreen() {
 
   const handleNext = () => {
     const isHost = room.hostId === useGameStore.getState().playerId;
-    if (isHost) {
-      router.push("/room/result");
-    }
+    if (isHost) router.push("/room/result");
   };
 
   return (
     <Screen style={styles.container}>
-      {phase === "category" && (
-        <Animated.View key="cat" entering={FadeIn.duration(400)} exiting={FadeOut.duration(200)} style={styles.center}>
-          <Text style={[typography.small, { color: colors.textMuted, letterSpacing: 1.5 }]}>THE CATEGORY</Text>
-          <Text style={[typography.h1, { marginTop: spacing.lg, textAlign: "center" }]}>{latestResult.categoryText}</Text>
-        </Animated.View>
-      )}
+      <Animated.View style={[styles.center, { opacity: fadeAnim }]}>
+        {phase === "category" && (
+          <View>
+            <Text style={[typography.small, { color: colors.textMuted, letterSpacing: 1.5, textAlign: "center" }]}>THE CATEGORY</Text>
+            <Text style={[typography.h1, { marginTop: spacing.lg, textAlign: "center" }]}>{latestResult.categoryText}</Text>
+          </View>
+        )}
 
-      {phase === "countdown" && (
-        <Animated.View key="cd" entering={FadeIn.duration(200)} exiting={FadeOut.duration(200)} style={styles.center}>
-          <Text style={[typography.display, { color: colors.primary }]}>...</Text>
-        </Animated.View>
-      )}
+        {phase === "countdown" && (
+          <Text style={[typography.display, { color: colors.primary, textAlign: "center" }]}>...</Text>
+        )}
 
-      {phase === "winner" && (
-        <Animated.View key="win" entering={FadeIn.duration(500)} exiting={FadeOut.duration(200)} style={styles.center}>
+        {phase === "winner" && (
           <View style={[styles.winnerCard, { borderColor: latestResult.winnerColor }]}>
             <View style={[styles.winnerAvatar, { backgroundColor: latestResult.winnerColor }]}>
               <Text style={styles.winnerAvatarText}>{latestResult.winnerName.charAt(0).toUpperCase()}</Text>
@@ -87,37 +84,35 @@ export default function RevealScreen() {
               {latestResult.winnerVotes} of {latestResult.totalVotes} votes
             </Text>
           </View>
-        </Animated.View>
-      )}
+        )}
 
-      {phase === "commentary" && (
-        <Animated.View key="cmt" entering={FadeIn.duration(400)} exiting={FadeOut.duration(200)} style={styles.center}>
+        {phase === "commentary" && (
           <Text style={[typography.h3, { textAlign: "center", color: colors.textSecondary, fontStyle: "italic", lineHeight: 28 }]}>
-            "{latestResult.commentary}"
+            &quot;{latestResult.commentary}&quot;
           </Text>
-        </Animated.View>
-      )}
+        )}
 
-      {phase === "stats" && (
-        <Animated.View key="stats" entering={FadeIn.duration(400)} exiting={FadeOut.duration(200)} style={styles.center}>
-          <Text style={[typography.small, { color: colors.textMuted, letterSpacing: 1.5, marginBottom: spacing.lg }]}>VOTE BREAKDOWN</Text>
-          {latestResult.voteCounts.map((vc) => (
-            <View key={vc.playerId} style={styles.statRow}>
-              <View style={[styles.statDot, { backgroundColor: vc.playerColor }]} />
-              <Text style={[typography.body, { flex: 1 }]}>{vc.playerName}</Text>
-              <Text style={[typography.bodyBold, { color: vc.count > 0 ? colors.text : colors.textMuted }]}>{vc.count}</Text>
-            </View>
-          ))}
-        </Animated.View>
-      )}
+        {phase === "stats" && (
+          <View style={{ width: "100%" }}>
+            <Text style={[typography.small, { color: colors.textMuted, letterSpacing: 1.5, marginBottom: spacing.lg, textAlign: "center" }]}>VOTE BREAKDOWN</Text>
+            {latestResult.voteCounts.map((vc) => (
+              <View key={vc.playerId} style={styles.statRow}>
+                <View style={[styles.statDot, { backgroundColor: vc.playerColor }]} />
+                <Text style={[typography.body, { flex: 1 }]}>{vc.playerName}</Text>
+                <Text style={[typography.bodyBold, { color: vc.count > 0 ? colors.text : colors.textMuted }]}>{vc.count}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
-      {phase === "next" && (
-        <Animated.View key="next" entering={FadeIn.duration(300)} style={styles.footer}>
-          <SoftButton title="View Result Card" onPress={handleNext} />
-          <View style={{ height: spacing.md }} />
-          <SoftButton title="Continue" onPress={() => {}} variant="outline" />
-        </Animated.View>
-      )}
+        {phase === "next" && (
+          <View style={styles.footer}>
+            <SoftButton title="View Result Card" onPress={handleNext} />
+            <View style={{ height: spacing.md }} />
+            <SoftButton title="Continue" onPress={() => {}} variant="outline" />
+          </View>
+        )}
+      </Animated.View>
     </Screen>
   );
 }
@@ -138,5 +133,5 @@ const styles = StyleSheet.create({
   winnerAvatarText: { color: "#FFF", fontSize: 28, fontWeight: "800" },
   statRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm, width: "100%" },
   statDot: { width: 12, height: 12, borderRadius: 6 },
-  footer: { paddingBottom: spacing.xxxl },
+  footer: { width: "100%", paddingBottom: spacing.xxxl },
 });

@@ -3,7 +3,10 @@
     "allowJs": true,
     "esModuleInterop": true,
     "jsx": "react-native",
-    "lib": ["DOM", "ESNext"],
+    "lib": [
+      "DOM",
+      "ESNext"
+    ],
     "module": "ESNext",
     "moduleDetection": "force",
     "moduleResolution": "node",
@@ -14,7 +17,9 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@secret-reputation/shared": ["../../packages/shared/src/index.ts"]
+      "@secret-reputation/shared": [
+        "../../packages/shared/src/index.ts"
+      ]
     }
   },
   "include": [
@@ -29,5 +34,6 @@
     "android",
     "ios",
     "../../packages/shared/src/tests.ts"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }

@@ -6,26 +6,15 @@ interface Env {
   GAME_ROOM: DurableObjectNamespace;
 }
 
-// Room code -> Durable Object ID mapping
-// In production, use KV for this. For now, derive deterministically from code.
 function roomIdFromCode(env: Env, code: string): DurableObjectId {
   return env.GAME_ROOM.idFromName(`room:${code.toUpperCase()}`);
-}
-
-function generateRoomCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous chars
-  let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
 }
 
 function corsHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Upgrade",
   };
 }
 
@@ -41,15 +30,13 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // CORS preflight
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }
 
-    // POST /api/rooms — create a new room
-    if (path === "/api/rooms" && request.method === "POST") {
-      const code = generateRoomCode();
-      return jsonResponse({ code });
+    // Health check
+    if (path === "/" || path === "/health") {
+      return jsonResponse({ status: "ok" });
     }
 
     // GET /api/rooms/:code/ws — WebSocket upgrade
@@ -63,17 +50,19 @@ export default {
 
       const id = roomIdFromCode(env, code);
       const stub = env.GAME_ROOM.get(id);
-      return stub.fetch(request);
+      // Forward with room code in the URL so the DO knows it
+      return stub.fetch(new Request(`http://internal/ws?code=${code}`, {
+        headers: request.headers,
+      }));
     }
 
-    // GET /api/rooms/:code — check if room exists
+    // GET /api/rooms/:code — check room status
     const checkMatch = path.match(/^\/api\/rooms\/([A-Z0-9]{4,6})$/i);
     if (checkMatch) {
       const code = checkMatch[1].toUpperCase();
       const id = roomIdFromCode(env, code);
       const stub = env.GAME_ROOM.get(id);
-      const resp = await stub.fetch(new Request(`http://internal/status`));
-      return resp;
+      return stub.fetch(new Request("http://internal/status"));
     }
 
     return jsonResponse({ error: "Not found" }, 404);
