@@ -228,15 +228,21 @@ export class GameRoom implements DurableObject {
   private votes: Vote[] = [];
   private reconnectTokens: Map<string, string> = new Map();
 
+  private async hydrateFromStorageIfNeeded(force: boolean = false): Promise<void> {
+    if (!force && this.room) return;
+
+    const stored = await this.state.storage.get<PersistedState>("gameState");
+    if (!stored) return;
+
+    this.room = stored.room;
+    this.votes = stored.votes;
+    this.reconnectTokens = new Map(Object.entries(stored.reconnectTokens ?? {}));
+  }
+
   constructor(state: DurableObjectState, _env: unknown) {
     this.state = state;
     this.state.blockConcurrencyWhile(async () => {
-      const stored = await this.state.storage.get<PersistedState>("gameState");
-      if (stored) {
-        this.room = stored.room;
-        this.votes = stored.votes;
-        this.reconnectTokens = new Map(Object.entries(stored.reconnectTokens ?? {}));
-      }
+      await this.hydrateFromStorageIfNeeded(true);
     });
     this.state.getWebSockets().forEach((ws) => {
       const meta = ws.deserializeAttachment() as SessionInfo | null;
@@ -289,6 +295,8 @@ export class GameRoom implements DurableObject {
     const url = new URL(request.url);
 
     if (url.pathname === "/status") {
+      await this.hydrateFromStorageIfNeeded();
+
       if (!this.room) {
         return new Response(JSON.stringify({ exists: false }), {
           headers: { "Content-Type": "application/json" },
@@ -479,6 +487,8 @@ export class GameRoom implements DurableObject {
     ws: WebSocket,
     payload: { code: string; playerName: string; playerColor: string },
   ): Promise<void> {
+    await this.hydrateFromStorageIfNeeded();
+
     if (!this.room) {
       this.sendTo(ws, { type: "ERROR", payload: { message: "Room does not exist" } });
       return;
@@ -526,6 +536,8 @@ export class GameRoom implements DurableObject {
     ws: WebSocket,
     payload: { playerId: string; reconnectToken: string },
   ): Promise<void> {
+    await this.hydrateFromStorageIfNeeded();
+
     if (!this.room) {
       this.sendTo(ws, { type: "ERROR", payload: { message: "Room does not exist" } });
       return;
