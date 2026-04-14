@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Alert, ScrollView } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Screen, SoftButton, Input, ColorPicker } from "../src/components";
 import { colors, typography, spacing } from "../src/theme";
 import { useGameStore } from "../src/store";
@@ -8,12 +8,22 @@ import { wsClient } from "../src/ws";
 
 export default function JoinRoomScreen() {
   const router = useRouter();
-  const { playerName, playerColor, setPlayerName, setPlayerColor } = useGameStore();
+  const params = useLocalSearchParams<{ room?: string | string[] }>();
+  const roomStatus = useGameStore((state) => state.room?.status);
+  const serverError = useGameStore((state) => state.error);
+  const { playerName, playerColor, setPlayerName, setPlayerColor, setRoom, setError } = useGameStore();
 
-  const [code, setCode] = useState("");
+  const deepLinkedCode = Array.isArray(params.room) ? params.room[0] : params.room;
+
+  const [code, setCode] = useState((deepLinkedCode ?? "").toUpperCase().slice(0, 6));
   const [name, setName] = useState(playerName);
   const [selectedColor, setSelectedColor] = useState(playerColor);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!deepLinkedCode) return;
+    setCode(deepLinkedCode.toUpperCase().slice(0, 6));
+  }, [deepLinkedCode]);
 
   const canJoin = name.trim().length >= 1 && code.trim().length >= 4;
 
@@ -22,6 +32,8 @@ export default function JoinRoomScreen() {
 
     setPlayerName(name.trim());
     setPlayerColor(selectedColor);
+    setRoom(null);
+    setError(null);
 
     setLoading(true);
     try {
@@ -34,12 +46,24 @@ export default function JoinRoomScreen() {
           playerColor: selectedColor,
         },
       });
-      router.replace("/room/lobby");
     } catch {
       setLoading(false);
       Alert.alert("Connection Failed", "Could not join the room. Check the code and try again.");
     }
   };
+
+  useEffect(() => {
+    if (loading && roomStatus === "lobby") {
+      router.replace("/room/lobby");
+    }
+  }, [loading, roomStatus, router]);
+
+  useEffect(() => {
+    if (!loading || !serverError) return;
+    setLoading(false);
+    Alert.alert("Could not join room", serverError);
+    setError(null);
+  }, [loading, serverError, setError]);
 
   return (
     <Screen>
@@ -70,7 +94,7 @@ export default function JoinRoomScreen() {
         />
 
         <Text style={styles.label}>YOUR NAME</Text>
-        <Input value={name} onChangeText={setName} placeholder="what should we call you" maxLength={16} />
+        <Input value={name} onChangeText={setName} placeholder="what should we call you" maxLength={20} />
 
         <Text style={styles.label}>YOUR COLOR</Text>
         <ColorPicker selected={selectedColor} onSelect={setSelectedColor} />

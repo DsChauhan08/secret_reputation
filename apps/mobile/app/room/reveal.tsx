@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { Screen, SoftButton, Card } from "../../src/components";
+import { Screen, SoftButton } from "../../src/components";
 import { colors, typography, spacing, radii, shadow } from "../../src/theme";
 import { useGameStore } from "../../src/store";
+import { wsClient } from "../../src/ws";
 
 type RevealPhase = "category" | "countdown" | "winner" | "commentary" | "stats" | "next";
 
@@ -13,6 +14,7 @@ export default function RevealScreen() {
   const room = useGameStore((s) => s.room);
   const [phase, setPhase] = useState<RevealPhase>("category");
   const [fadeAnim] = useState(() => new Animated.Value(0));
+  const cancelledRef = useRef(false);
 
   const latestResult = room?.results?.[room.results.length - 1];
 
@@ -24,16 +26,18 @@ export default function RevealScreen() {
   useEffect(() => {
     if (!latestResult) return;
 
+    cancelledRef.current = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
     const timings: Record<RevealPhase, number> = {
       category: 2000, countdown: 1500, winner: 3000, commentary: 2500, stats: 3000, next: 0,
     };
     const sequence: RevealPhase[] = ["category", "countdown", "winner", "commentary", "stats", "next"];
     let i = 0;
-    let timer: ReturnType<typeof setTimeout>;
-
     const advance = () => {
-      if (i >= sequence.length - 1) return;
+      if (cancelledRef.current || i >= sequence.length - 1) return;
       timer = setTimeout(() => {
+        if (cancelledRef.current) return;
         i++;
         setPhase(sequence[i]);
         fadeIn();
@@ -45,19 +49,31 @@ export default function RevealScreen() {
     setPhase("category");
     fadeIn();
     advance();
-    return () => clearTimeout(timer);
+    return () => {
+      cancelledRef.current = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
   }, [latestResult?.categoryId]);
 
   useEffect(() => {
     if (room?.status === "voting") { setPhase("category"); router.replace("/room/vote"); }
     if (room?.status === "ended") router.replace("/room/end");
-  }, [room?.status]);
+  }, [room?.status, router]);
 
   if (!room || !latestResult) return null;
 
-  const handleNext = () => {
-    const isHost = room.hostId === useGameStore.getState().playerId;
-    if (isHost) router.push("/room/result");
+  const isHost = room.hostId === useGameStore.getState().playerId;
+
+  const handleViewCard = () => {
+    router.push("/room/result");
+  };
+
+  const handleContinue = () => {
+    if (isHost) {
+      wsClient.send({ type: "NEXT_ROUND", payload: {} as Record<string, never> });
+    }
   };
 
   return (
@@ -107,9 +123,9 @@ export default function RevealScreen() {
 
         {phase === "next" && (
           <View style={styles.footer}>
-            <SoftButton title="View Result Card" onPress={handleNext} />
+            <SoftButton title="View Result Card" onPress={handleViewCard} />
             <View style={{ height: spacing.md }} />
-            <SoftButton title="Continue" onPress={() => {}} variant="outline" />
+            {isHost && <SoftButton title="Next Round" onPress={handleContinue} variant="outline" />}
           </View>
         )}
       </Animated.View>

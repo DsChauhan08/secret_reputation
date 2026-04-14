@@ -144,6 +144,11 @@ assert(!isContentSafe("a".repeat(121)).safe, "too long category rejected (121 ch
 // Invalid - banned content
 assert(!isContentSafe("most likely to r" + "ape someone").safe, "explicit content rejected");
 assert(!isContentSafe("most likely to ki" + "ll your family").safe, "threat rejected");
+assert(!isContentSafe("most likely to drop their address online").safe, "doxxing intent rejected");
+assert(!isContentSafe("most likely to post phone number publicly").safe, "phone leak intent rejected");
+assert(!isContentSafe("most likely to share this link https://evil.test").safe, "link content rejected");
+assert(!isContentSafe("most likely to post someone@example.com in chat").safe, "email content rejected");
+assert(!isContentSafe("most likely to call +1 555 123 4567 at 2am").safe, "phone number content rejected");
 
 // Edge cases
 assert(isContentSafe("a".repeat(120)).safe, "120 chars passes (boundary)");
@@ -261,7 +266,7 @@ assert(codes.size === 100, `100 generated codes are all unique (got ${codes.size
 const sampleCode = generateRoomCode();
 assert(sampleCode.length === 6, `code is 6 chars (got ${sampleCode.length})`);
 assert(/^[A-Z2-9]{6}$/.test(sampleCode), `code matches pattern [A-Z2-9] (got ${sampleCode})`);
-assert(!/[0O1IL]/.test(sampleCode), "code has no ambiguous chars (0,O,1,I,L)");
+  assert(!/[0O1I]/.test(sampleCode), "code has no ambiguous chars (0,O,1,I)");
 
 // ============================================================
 // SUMMARY

@@ -1,5 +1,5 @@
-const WS_URL = "wss://secret-reputation.singhdschauhan10.workers.dev";
-const HTTP_URL = "https://secret-reputation.singhdschauhan10.workers.dev";
+const WS_URL = process.env.WS_URL ?? "wss://secret-reputation.singhdschauhan10.workers.dev";
+const HTTP_URL = process.env.HTTP_URL ?? "https://secret-reputation.singhdschauhan10.workers.dev";
 
 let passed = 0;
 let failed = 0;
@@ -123,7 +123,7 @@ async function testJoinRoom() {
     type: "CREATE_ROOM",
     payload: { playerName: "Host", playerColor: "#845EC2", roomName: "Join Test", mode: "light-roast" },
   });
-  const created = await waitForMessage(hostWs, "ROOM_CREATED");
+  await waitForMessage(hostWs, "ROOM_CREATED");
 
   const p2Ws = await connectWS(code);
   assert(p2Ws.readyState === WebSocket.OPEN, "Player 2 connected");
@@ -147,6 +147,68 @@ async function testJoinRoom() {
   hostWs.close();
   p2Ws.close();
   return code;
+}
+
+async function testReconnectFlow() {
+  console.log("\n🔒 SECURITY: Reconnect restores player session");
+  const code = randomCode();
+
+  const hostWs = await connectWS(code);
+  send(hostWs, {
+    type: "CREATE_ROOM",
+    payload: { playerName: "Host", playerColor: "#845EC2", roomName: "Reconnect Test", mode: "light-roast" },
+  });
+
+  const created = await waitForMessage(hostWs, "ROOM_CREATED");
+  const hostId = created.payload.playerId as string;
+  const hostToken = created.payload.reconnectToken as string;
+  assert(typeof hostToken === "string" && hostToken.length > 10, "Host receives reconnect token");
+
+  const p2JoinNotif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p2Ws = await connectWS(code);
+  send(p2Ws, {
+    type: "JOIN_ROOM",
+    payload: { code, playerName: "P2", playerColor: "#FF8066" },
+  });
+  await waitForMessage(p2Ws, "ROOM_JOINED");
+  await p2JoinNotif;
+
+  const p3JoinNotif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p3Ws = await connectWS(code);
+  send(p3Ws, {
+    type: "JOIN_ROOM",
+    payload: { code, playerName: "P3", playerColor: "#4B4453" },
+  });
+  await waitForMessage(p3Ws, "ROOM_JOINED");
+  await p3JoinNotif;
+
+  const cats = created.payload.room.categories;
+  const gsHost = waitForMessage(hostWs, "GAME_STARTED");
+  const gsP2 = waitForMessage(p2Ws, "GAME_STARTED");
+  const gsP3 = waitForMessage(p3Ws, "GAME_STARTED");
+  send(hostWs, {
+    type: "START_GAME",
+    payload: { selectedCategoryIds: [cats[0].id, cats[1].id, cats[2].id] },
+  });
+  const started = await gsHost;
+  await gsP2;
+  await gsP3;
+
+  const cat = started.payload.room.selectedCategoryIds[0];
+
+  hostWs.close();
+  const reconnectWs = await connectWS(code);
+  send(reconnectWs, { type: "RECONNECT", payload: { playerId: hostId, reconnectToken: hostToken } });
+  const rejoined = await waitForMessage(reconnectWs, "ROOM_JOINED");
+  assert(rejoined.payload.playerId === hostId, "Reconnected socket keeps same playerId");
+
+  send(reconnectWs, { type: "SUBMIT_VOTE", payload: { categoryId: cat, votedForId: rejoined.payload.room.players[1].id } });
+  const voteAck = await waitForMessage(reconnectWs, "VOTE_RECEIVED");
+  assert(voteAck.type === "VOTE_RECEIVED", "Reconnected player can vote");
+
+  reconnectWs.close();
+  p2Ws.close();
+  p3Ws.close();
 }
 
 async function testJoinNonexistentRoom() {
@@ -198,7 +260,7 @@ async function testFullGameFlow() {
   assert(p2Id !== p3Id, "Player IDs are unique");
 
   const categories = created.payload.room.categories;
-  const selectedIds = categories.slice(0, 2).map((c: any) => c.id);
+  const selectedIds = categories.slice(0, 3).map((c: any) => c.id);
 
   const hostStartPromise = waitForMessage(hostWs, "GAME_STARTED");
   const p2StartPromise = waitForMessage(p2Ws, "GAME_STARTED");
@@ -209,13 +271,15 @@ async function testFullGameFlow() {
   const hostStarted = await hostStartPromise;
   const p2Started = await p2StartPromise;
   const p3Started = await p3StartPromise;
+  const runtimeSelectedIds = hostStarted.payload.room.selectedCategoryIds as string[];
   assert(hostStarted.payload.room.status === "voting", "Status is voting");
-  assert(hostStarted.payload.room.totalRounds === 2, "Total rounds = 2");
+  assert(hostStarted.payload.room.totalRounds === 3, "Total rounds = 3");
+  assert(runtimeSelectedIds.length === 3, "Runtime selected category count is 3");
   assert(p2Started.type === "GAME_STARTED", "P2 received GAME_STARTED");
   assert(p3Started.type === "GAME_STARTED", "P3 received GAME_STARTED");
 
   console.log("  📋 Round 1: Voting...");
-  const cat1 = selectedIds[0];
+  const cat1 = runtimeSelectedIds[0];
 
   send(hostWs, { type: "SUBMIT_VOTE", payload: { categoryId: cat1, votedForId: p2Id } });
   const vr1 = await waitForMessage(hostWs, "VOTE_RECEIVED");
@@ -253,9 +317,9 @@ async function testFullGameFlow() {
   await nextP2Promise;
   await nextP3Promise;
   assert(nextRound.payload.currentRound === 1, "Round advanced to 1");
-  assert(nextRound.payload.categoryId === selectedIds[1], "Correct category for round 2");
+  assert(nextRound.payload.categoryId === runtimeSelectedIds[1], "Correct category for round 2");
 
-  const cat2 = selectedIds[1];
+  const cat2 = runtimeSelectedIds[1];
   send(hostWs, { type: "SUBMIT_VOTE", payload: { categoryId: cat2, votedForId: p3Id } });
   await waitForMessage(hostWs, "VOTE_RECEIVED");
 
@@ -271,6 +335,33 @@ async function testFullGameFlow() {
   await reveal2HostPromise;
   assert(reveal2.payload.result.winnerId === p3Id, "Charlie wins round 2 (2 votes)");
 
+  console.log("  📋 Round 3: Final round...");
+  const nextToRound3Host = waitForMessage(hostWs, "NEXT_ROUND");
+  const nextToRound3P2 = waitForMessage(p2Ws, "NEXT_ROUND");
+  const nextToRound3P3 = waitForMessage(p3Ws, "NEXT_ROUND");
+
+  send(hostWs, { type: "NEXT_ROUND", payload: {} });
+  await nextToRound3Host;
+  await nextToRound3P2;
+  await nextToRound3P3;
+
+  const cat3 = runtimeSelectedIds[2];
+  send(hostWs, { type: "SUBMIT_VOTE", payload: { categoryId: cat3, votedForId: p2Id } });
+  await waitForMessage(hostWs, "VOTE_RECEIVED");
+
+  send(p2Ws, { type: "SUBMIT_VOTE", payload: { categoryId: cat3, votedForId: p3Id } });
+  await waitForMessage(p2Ws, "VOTE_RECEIVED");
+
+  const reveal3Host = waitForMessage(hostWs, "REVEAL_RESULT");
+  const reveal3P2 = waitForMessage(p2Ws, "REVEAL_RESULT");
+  const reveal3P3 = waitForMessage(p3Ws, "REVEAL_RESULT");
+
+  send(p3Ws, { type: "SUBMIT_VOTE", payload: { categoryId: cat3, votedForId: p2Id } });
+
+  await reveal3Host;
+  await reveal3P2;
+  await reveal3P3;
+
   const endHostPromise = waitForMessage(hostWs, "GAME_ENDED");
   const endP2Promise = waitForMessage(p2Ws, "GAME_ENDED");
   const endP3Promise = waitForMessage(p3Ws, "GAME_ENDED");
@@ -281,7 +372,7 @@ async function testFullGameFlow() {
   await endP2Promise;
   await endP3Promise;
   assert(ended.type === "GAME_ENDED", "Received GAME_ENDED");
-  assert(ended.payload.results.length === 2, "2 results in final summary");
+  assert(ended.payload.results.length === 3, "3 results in final summary");
 
   hostWs.close();
   p2Ws.close();
@@ -314,12 +405,17 @@ async function testSecuritySelfVote() {
   const gs1 = waitForMessage(hostWs, "GAME_STARTED");
   const gs2 = waitForMessage(p2Ws, "GAME_STARTED");
   const gs3 = waitForMessage(p3Ws, "GAME_STARTED");
-  send(hostWs, { type: "START_GAME", payload: { selectedCategoryIds: [cats[0].id] } });
-  await gs1;
+  send(hostWs, {
+    type: "START_GAME",
+    payload: { selectedCategoryIds: [cats[0].id, cats[1].id, cats[2].id] },
+  });
+  const started = await gs1;
   await gs2;
   await gs3;
 
-  send(hostWs, { type: "SUBMIT_VOTE", payload: { categoryId: cats[0].id, votedForId: hostId } });
+  const currentCategoryId = started.payload.room.selectedCategoryIds[0];
+
+  send(hostWs, { type: "SUBMIT_VOTE", payload: { categoryId: currentCategoryId, votedForId: hostId } });
   const err = await waitForMessage(hostWs, "ERROR");
   assert(err.type === "ERROR", "Self-vote rejected");
   assert(err.payload.message === "Cannot vote for yourself", "Correct error for self-vote");
@@ -382,6 +478,36 @@ async function testSecurityMinPlayers() {
   p2Ws.close();
 }
 
+async function testSecurityMinCategories() {
+  console.log("\n🔒 SECURITY: Min 3 categories to start");
+  const code = randomCode();
+
+  const hostWs = await connectWS(code);
+  send(hostWs, { type: "CREATE_ROOM", payload: { playerName: "Host", playerColor: "#845EC2", roomName: "Min Cat", mode: "light-roast" } });
+  const created = await waitForMessage(hostWs, "ROOM_CREATED");
+
+  const hostP2Notif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p2Ws = await connectWS(code);
+  send(p2Ws, { type: "JOIN_ROOM", payload: { code, playerName: "P2", playerColor: "#FF8066" } });
+  await waitForMessage(p2Ws, "ROOM_JOINED");
+  await hostP2Notif;
+
+  const hostP3Notif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p3Ws = await connectWS(code);
+  send(p3Ws, { type: "JOIN_ROOM", payload: { code, playerName: "P3", playerColor: "#4B4453" } });
+  await waitForMessage(p3Ws, "ROOM_JOINED");
+  await hostP3Notif;
+
+  send(hostWs, { type: "START_GAME", payload: { selectedCategoryIds: [created.payload.room.categories[0].id] } });
+  const err = await waitForMessage(hostWs, "ERROR");
+  assert(err.type === "ERROR", "Start with 1 category rejected");
+  assert(err.payload.message.includes("Select at least 3"), "Correct min category error");
+
+  hostWs.close();
+  p2Ws.close();
+  p3Ws.close();
+}
+
 async function testSecurityInvalidJSON() {
   console.log("\n🔒 SECURITY: Invalid JSON handling");
   const code = randomCode();
@@ -422,9 +548,111 @@ async function testSecurityRoomFull() {
   sockets.forEach(s => s.close());
 }
 
+async function testInvitePage() {
+  console.log("\n🔍 TEST: Invite page");
+  const res = await fetch(`${HTTP_URL}/invite?room=ABCD23`);
+  assert(res.status === 200, "Invite returns 200");
+  const html = await res.text();
+  assert(html.includes("Secret Reputation"), "Has app name");
+  assert(html.includes("ABCD23"), "Has sanitized room code");
+  assert(html.includes("secretrep://join?room=ABCD23"), "Has deep link");
+  assert(html.includes("releases/latest"), "Has download fallback");
+
+  const badRes = await fetch(`${HTTP_URL}/invite?room=<script>alert(1)</script>`);
+  const badHtml = await badRes.text();
+  assert(!badHtml.includes("<script>alert"), "XSS in room code sanitized");
+}
+
+async function testCustomCategories() {
+  console.log("\n🔍 TEST: Custom categories in START_GAME");
+  const code = randomCode();
+
+  const hostWs = await connectWS(code);
+  send(hostWs, { type: "CREATE_ROOM", payload: { playerName: "Host", playerColor: "#845EC2", roomName: "Custom Test", mode: "light-roast" } });
+  const created = await waitForMessage(hostWs, "ROOM_CREATED");
+
+  const p2Notif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p2Ws = await connectWS(code);
+  send(p2Ws, { type: "JOIN_ROOM", payload: { code, playerName: "P2", playerColor: "#FF8066" } });
+  await waitForMessage(p2Ws, "ROOM_JOINED");
+  await p2Notif;
+
+  const p3Notif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p3Ws = await connectWS(code);
+  send(p3Ws, { type: "JOIN_ROOM", payload: { code, playerName: "P3", playerColor: "#4B4453" } });
+  await waitForMessage(p3Ws, "ROOM_JOINED");
+  await p3Notif;
+
+  const builtinIds = created.payload.room.categories.slice(0, 2).map((c: any) => c.id);
+  const customCats = [
+    { id: "custom_test_one", text: "most likely to make a custom question" },
+    { id: "custom_test_two", text: "most likely to add their own category rules" },
+  ];
+
+  const gs1 = waitForMessage(hostWs, "GAME_STARTED");
+  const gs2 = waitForMessage(p2Ws, "GAME_STARTED");
+  send(hostWs, {
+    type: "START_GAME",
+    payload: {
+      selectedCategoryIds: [...builtinIds, "custom_test_one"],
+      customCategories: customCats,
+    },
+  });
+
+  const started = await gs1;
+  await gs2;
+  assert(started.payload.room.status === "voting", "Game started with custom categories");
+
+  const hasCust = started.payload.room.categories.some((c: any) => c.id === "custom_test_one" && c.isCustom);
+  assert(hasCust, "Custom category merged into room");
+  assert(started.payload.room.totalRounds === 3, "3 rounds (2 builtin + 1 custom)");
+
+  hostWs.close();
+  p2Ws.close();
+  p3Ws.close();
+}
+
+async function testCustomCategoryModeration() {
+  console.log("\n🔒 SECURITY: Custom category moderation");
+  const code = randomCode();
+
+  const hostWs = await connectWS(code);
+  send(hostWs, { type: "CREATE_ROOM", payload: { playerName: "Host", playerColor: "#845EC2", roomName: "Mod Test", mode: "light-roast" } });
+  const created = await waitForMessage(hostWs, "ROOM_CREATED");
+
+  const p2Notif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p2Ws = await connectWS(code);
+  send(p2Ws, { type: "JOIN_ROOM", payload: { code, playerName: "P2", playerColor: "#FF8066" } });
+  await waitForMessage(p2Ws, "ROOM_JOINED");
+  await p2Notif;
+
+  const p3Notif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p3Ws = await connectWS(code);
+  send(p3Ws, { type: "JOIN_ROOM", payload: { code, playerName: "P3", playerColor: "#4B4453" } });
+  await waitForMessage(p3Ws, "ROOM_JOINED");
+  await p3Notif;
+
+  const builtinIds = created.payload.room.categories.slice(0, 3).map((c: any) => c.id);
+  send(hostWs, {
+    type: "START_GAME",
+    payload: {
+      selectedCategoryIds: builtinIds,
+      customCategories: [{ id: "custom_bad", text: "most likely to kill yourself" }],
+    },
+  });
+
+  const err = await waitForMessage(hostWs, "ERROR");
+  assert(err.type === "ERROR", "Bad custom category rejected");
+  assert(err.payload.message.includes("inappropriate"), "Moderation reason given");
+
+  hostWs.close();
+  p2Ws.close();
+  p3Ws.close();
+}
+
 async function main() {
   console.log("═══════════════════════════════════════════");
-  console.log("  SECRET REPUTATION — E2E TEST SUITE");
+  console.log("  SECRET REPUTATION — E2E TEST SUITE v2");
   console.log(`  Target: ${WS_URL}`);
   console.log("═══════════════════════════════════════════");
 
@@ -433,15 +661,20 @@ async function main() {
     await testNotFoundEndpoint();
     await testNonWSUpgrade();
     await testRoomStatusEmpty();
+    await testInvitePage();
     await testCreateRoom();
     await testJoinRoom();
     await testJoinNonexistentRoom();
+    await testReconnectFlow();
+    await testCustomCategories();
     await testFullGameFlow();
     await testSecuritySelfVote();
     await testSecurityNonHostStart();
     await testSecurityMinPlayers();
+    await testSecurityMinCategories();
     await testSecurityInvalidJSON();
     await testSecurityRoomFull();
+    await testCustomCategoryModeration();
   } catch (err) {
     console.error("\n💥 FATAL ERROR:", err);
     failed++;

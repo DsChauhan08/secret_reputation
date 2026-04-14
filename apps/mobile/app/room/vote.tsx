@@ -22,7 +22,7 @@ export default function VoteScreen() {
   useEffect(() => {
     if (room?.status === "revealing") router.replace("/room/reveal");
     if (room?.status === "ended") router.replace("/room/end");
-  }, [room?.status]);
+  }, [room?.status, router]);
 
   useEffect(() => {
     setVotedFor(null);
@@ -38,7 +38,7 @@ export default function VoteScreen() {
 
   if (!room || !currentCategory) return null;
 
-  const otherPlayers = room.players.filter((p) => p.id !== playerId);
+  const otherPlayers = room.players.filter((p) => p.id !== playerId && p.connected);
 
   return (
     <Screen>

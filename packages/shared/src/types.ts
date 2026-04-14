@@ -20,6 +20,11 @@ export interface Category {
   isCustom: boolean;
 }
 
+export interface CustomCategoryInput {
+  id: string;
+  text: string;
+}
+
 export interface Vote {
   playerId: string;
   categoryId: string;
@@ -73,7 +78,8 @@ export interface Room {
 export type ClientEvent =
   | { type: "CREATE_ROOM"; payload: { playerName: string; playerColor: string; roomName: string; mode: RoomMode } }
   | { type: "JOIN_ROOM"; payload: { code: string; playerName: string; playerColor: string } }
-  | { type: "START_GAME"; payload: { selectedCategoryIds: string[] } }
+  | { type: "RECONNECT"; payload: { playerId: string; reconnectToken: string } }
+  | { type: "START_GAME"; payload: { selectedCategoryIds: string[]; customCategories?: CustomCategoryInput[] } }
   | { type: "SUBMIT_VOTE"; payload: { categoryId: string; votedForId: string } }
   | { type: "NEXT_ROUND"; payload: {} }
   | { type: "PLAY_AGAIN"; payload: {} }
@@ -81,8 +87,8 @@ export type ClientEvent =
 
 // Server -> Client
 export type ServerEvent =
-  | { type: "ROOM_CREATED"; payload: { room: Room; playerId: string } }
-  | { type: "ROOM_JOINED"; payload: { room: Room; playerId: string } }
+  | { type: "ROOM_CREATED"; payload: { room: Room; playerId: string; reconnectToken: string } }
+  | { type: "ROOM_JOINED"; payload: { room: Room; playerId: string; reconnectToken: string } }
   | { type: "PLAYER_JOINED"; payload: { player: Player } }
   | { type: "PLAYER_LEFT"; payload: { playerId: string } }
   | { type: "GAME_STARTED"; payload: { room: Room } }

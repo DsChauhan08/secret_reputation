@@ -13,6 +13,7 @@
     "noEmit": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
+    "ignoreDeprecations": "6.0",
     "target": "ESNext",
     "strict": true,
     "baseUrl": ".",

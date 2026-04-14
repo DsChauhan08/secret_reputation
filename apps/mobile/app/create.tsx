@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { Screen, SoftButton, Input, ModeCard, Card, ColorPicker } from "../src/components";
@@ -15,7 +15,9 @@ const MODES: { key: RoomMode; title: string; desc: string; color: string }[] = [
 
 export default function CreateRoomScreen() {
   const router = useRouter();
-  const { playerName, playerColor, setPlayerName, setPlayerColor } = useGameStore();
+  const roomStatus = useGameStore((state) => state.room?.status);
+  const serverError = useGameStore((state) => state.error);
+  const { playerName, playerColor, setPlayerName, setPlayerColor, setRoom, setError } = useGameStore();
 
   const [name, setName] = useState(playerName);
   const [selectedColor, setSelectedColor] = useState(playerColor);
@@ -31,6 +33,8 @@ export default function CreateRoomScreen() {
    
     setPlayerName(name.trim());
     setPlayerColor(selectedColor);
+    setRoom(null);
+    setError(null);
 
     setLoading(true);
     try {
@@ -48,12 +52,24 @@ export default function CreateRoomScreen() {
           mode,
         },
       });
-      router.replace("/room/lobby");
     } catch {
       setLoading(false);
       Alert.alert("Connection Failed", "Could not reach the server. Make sure the backend is running.");
     }
   };
+
+  useEffect(() => {
+    if (loading && roomStatus === "lobby") {
+      router.replace("/room/lobby");
+    }
+  }, [loading, roomStatus, router]);
+
+  useEffect(() => {
+    if (!loading || !serverError) return;
+    setLoading(false);
+    Alert.alert("Could not create room", serverError);
+    setError(null);
+  }, [loading, serverError, setError]);
 
   return (
     <Screen>
@@ -78,7 +94,7 @@ export default function CreateRoomScreen() {
           value={name}
           onChangeText={setName}
           placeholder="what should we call you"
-          maxLength={16}
+          maxLength={20}
           autoFocus={!playerName}
         />
 

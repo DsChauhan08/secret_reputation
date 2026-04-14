@@ -6,11 +6,12 @@
     "strict": true,
     "lib": ["ES2022"],
     "types": ["@cloudflare/workers-types"],
+    "rootDir": "../..",
     "outDir": "dist",
     "paths": {
       "@shared/*": ["../../packages/shared/src/*"]
     }
   },
   "include": ["src/**/*.ts", "../../packages/shared/src/**/*.ts"],
-  "exclude": ["src/e2e-test.ts"]
+  "exclude": ["src/e2e-test.ts", "../../packages/shared/src/tests.ts"]
 }

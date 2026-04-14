@@ -5,6 +5,7 @@ import * as Haptics from "expo-haptics";
 import { Screen, SoftButton, PlayerChip, Card } from "../../src/components";
 import { colors, typography, spacing } from "../../src/theme";
 import { useGameStore } from "../../src/store";
+import { buildShareMessage } from "../../src/inviteLinks";
 
 export default function LobbyScreen() {
   const router = useRouter();
@@ -16,12 +17,15 @@ export default function LobbyScreen() {
 
   useEffect(() => {
     if (room?.status === "voting") router.replace("/room/vote");
-  }, [room?.status]);
+  }, [room?.status, router]);
 
   const handleShare = async () => {
     if (!room) return;
     try {
-      await Share.share({ message: `Join my Secret Reputation room! Code: ${room.code}` });
+      await Share.share({
+        message: buildShareMessage(room.code),
+        title: "Join my Secret Reputation room",
+      });
     } catch {}
   };
 

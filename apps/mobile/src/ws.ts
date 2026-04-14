@@ -1,17 +1,19 @@
 import Constants from "expo-constants";
 import { handleServerEvent, useGameStore } from "./store";
-import type { ServerEvent } from "./store";
+import type { RoomMode, ServerEvent } from "./store";
+import type { CustomCategoryInput } from "@secret-reputation/shared";
 
-type ClientEvent =
-  | { type: "CREATE_ROOM"; payload: { playerName: string; playerColor: string; roomName: string; mode: string } }
+type AllowedOutboundEvent =
+  | { type: "CREATE_ROOM"; payload: { playerName: string; playerColor: string; roomName: string; mode: RoomMode } }
   | { type: "JOIN_ROOM"; payload: { code: string; playerName: string; playerColor: string } }
-  | { type: "START_GAME"; payload: { selectedCategoryIds: string[] } }
+  | { type: "RECONNECT"; payload: { playerId: string; reconnectToken: string } }
+  | { type: "START_GAME"; payload: { selectedCategoryIds: string[]; customCategories?: CustomCategoryInput[] } }
   | { type: "SUBMIT_VOTE"; payload: { categoryId: string; votedForId: string } }
   | { type: "NEXT_ROUND"; payload: Record<string, never> }
   | { type: "PLAY_AGAIN"; payload: Record<string, never> }
   | { type: "KICK_PLAYER"; payload: { playerId: string } };
 
-function getWsUrl(): string {
+function getConfiguredWsUrl(): string {
  
   const fromEnv = (Constants.expoConfig?.extra as Record<string, string> | undefined)?.wsUrl;
   if (fromEnv && fromEnv.startsWith("wss://")) return fromEnv;
@@ -21,11 +23,58 @@ function getWsUrl(): string {
   return "ws://localhost:8787";
 }
 
-const WS_BASE_URL = getWsUrl();
+function toHttpUrl(wsUrl: string): string {
+  if (wsUrl.startsWith("wss://")) return wsUrl.replace("wss://", "https://");
+  if (wsUrl.startsWith("ws://")) return wsUrl.replace("ws://", "http://");
+  return wsUrl;
+}
+
+export function getBackendBaseUrls(): { wsBaseUrl: string; httpBaseUrl: string } {
+  const wsBaseUrl = getConfiguredWsUrl();
+  return {
+    wsBaseUrl,
+    httpBaseUrl: toHttpUrl(wsBaseUrl),
+  };
+}
+
+const { wsBaseUrl: WS_BASE_URL } = getBackendBaseUrls();
 const CONNECTION_TIMEOUT_MS = 10000;
 
 function sanitizeString(str: string, maxLen: number = 100): string {
-  return str.replace(/[<>"'&]/g, "").trim().slice(0, maxLen);
+  return str.replace(/[\u0000-\u001F\u007F]/g, "").trim().slice(0, maxLen);
+}
+
+function sanitizeRoomCode(roomCode: string): string {
+  return roomCode.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+}
+
+function sanitizePayload(value: unknown, depth: number = 0): unknown {
+  if (depth > 5) return undefined;
+  if (typeof value === "string") return sanitizeString(value, 240);
+  if (typeof value === "number" || typeof value === "boolean" || value === null) return value;
+
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 64)
+      .map((item) => sanitizePayload(item, depth + 1))
+      .filter((item) => item !== undefined);
+  }
+
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(obj)) {
+      const safeKey = sanitizeString(key, 48);
+      if (!safeKey) continue;
+      const safeValue = sanitizePayload(entry, depth + 1);
+      if (safeValue !== undefined) {
+        sanitized[safeKey] = safeValue;
+      }
+    }
+    return sanitized;
+  }
+
+  return undefined;
 }
 
 class WebSocketClient {
@@ -35,14 +84,38 @@ class WebSocketClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private roomCode: string | null = null;
 
-  connect(roomCode: string): Promise<void> {
-    const sanitizedCode = sanitizeString(roomCode, 6).toUpperCase();
+  private sendReconnectIfPossible(): void {
+    const store = useGameStore.getState();
+    if (!store.playerId || !store.reconnectToken || !this.roomCode) return;
+
+    const roomCodeMatches = store.room?.code?.toUpperCase() === this.roomCode;
+    if (!roomCodeMatches) return;
+
+    this.send({
+      type: "RECONNECT",
+      payload: { playerId: store.playerId, reconnectToken: sanitizeString(store.reconnectToken, 128) },
+    });
+  }
+
+  connect(roomCode: string, isReconnect = false): Promise<void> {
+    const sanitizedCode = sanitizeRoomCode(roomCode);
     if (!/^[A-Z0-9]{4,6}$/.test(sanitizedCode)) {
       return Promise.reject(new Error("Invalid room code format"));
     }
 
     this.roomCode = sanitizedCode;
-    this.reconnectAttempts = 0;
+    if (!isReconnect) {
+      this.reconnectAttempts = 0;
+
+      if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+        this.ws.close(1000, "Switching room");
+      }
+
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+    }
 
     return new Promise<void>((resolve, reject) => {
       try {
@@ -65,7 +138,11 @@ class WebSocketClient {
         this.ws.onopen = () => {
           clearTimeout(timeout);
           this.reconnectAttempts = 0;
+          this.reconnectTimer = null;
           store.setConnection(true);
+          if (isReconnect && store.playerId && store.reconnectToken) {
+            this.sendReconnectIfPossible();
+          }
           resolve();
         };
 
@@ -81,8 +158,12 @@ class WebSocketClient {
         this.ws.onclose = () => {
           clearTimeout(timeout);
           store.setConnection(false);
+          const activeRoomCode = useGameStore.getState().room?.code?.toUpperCase();
+          const shouldReconnect = this.roomCode && activeRoomCode === this.roomCode;
           if (this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.scheduleReconnect();
+            if (shouldReconnect) {
+              this.scheduleReconnect();
+            }
           }
         };
 
@@ -98,22 +179,16 @@ class WebSocketClient {
     });
   }
 
-  send(event: ClientEvent): void {
+  send(event: AllowedOutboundEvent): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-   
-    const sanitized = { ...event };
-    if ("payload" in sanitized && typeof sanitized.payload === "object") {
-      const p = { ...sanitized.payload } as Record<string, unknown>;
-      for (const key of Object.keys(p)) {
-        if (typeof p[key] === "string") {
-          p[key] = sanitizeString(p[key] as string);
-        }
-      }
-      sanitized.payload = p as typeof event.payload;
-    }
-
-    this.ws.send(JSON.stringify(sanitized));
+    const sanitizedPayload = sanitizePayload(event.payload);
+    this.ws.send(
+      JSON.stringify({
+        type: event.type,
+        payload: sanitizedPayload ?? {},
+      }),
+    );
   }
 
   disconnect(): void {
@@ -138,7 +213,7 @@ class WebSocketClient {
     );
     this.reconnectTimer = setTimeout(() => {
       if (this.roomCode) {
-        this.connect(this.roomCode).catch(() => {});
+        this.connect(this.roomCode, true).catch(() => {});
       }
     }, delay);
   }

@@ -1,75 +1,13 @@
 import { create } from "zustand";
 import { PLAYER_COLORS } from "./theme";
-
-type RoomMode = "light-roast" | "normal-chaos" | "unhinged";
-type GameStatus = "lobby" | "voting" | "revealing" | "ended";
-
-interface Player {
-  id: string;
-  name: string;
-  color: string;
-  isHost: boolean;
-  connected: boolean;
-}
-
-interface Category {
-  id: string;
-  text: string;
-  mode: RoomMode;
-  isCustom: boolean;
-}
-
-interface VoteCount {
-  playerId: string;
-  playerName: string;
-  playerColor: string;
-  count: number;
-}
-
-interface RoundResult {
-  categoryId: string;
-  categoryText: string;
-  winnerId: string;
-  winnerName: string;
-  winnerColor: string;
-  winnerVotes: number;
-  totalVotes: number;
-  runnerId: string | null;
-  runnerName: string | null;
-  runnerVotes: number;
-  commentary: string;
-  voteCounts: VoteCount[];
-}
-
-interface Room {
-  id: string;
-  code: string;
-  name: string;
-  mode: RoomMode;
-  hostId: string;
-  players: Player[];
-  categories: Category[];
-  selectedCategoryIds: string[];
-  currentRound: number;
-  totalRounds: number;
-  status: GameStatus;
-  results: RoundResult[];
-  votesSubmitted: number;
-  votesRequired: number;
-}
-
-type ServerEvent =
-  | { type: "ROOM_CREATED"; payload: { room: Room; playerId: string } }
-  | { type: "ROOM_JOINED"; payload: { room: Room; playerId: string } }
-  | { type: "PLAYER_JOINED"; payload: { player: Player } }
-  | { type: "PLAYER_LEFT"; payload: { playerId: string } }
-  | { type: "GAME_STARTED"; payload: { room: Room } }
-  | { type: "VOTE_RECEIVED"; payload: { votesSubmitted: number; votesRequired: number } }
-  | { type: "REVEAL_RESULT"; payload: { result: RoundResult } }
-  | { type: "NEXT_ROUND"; payload: { currentRound: number; categoryId: string; categoryText: string } }
-  | { type: "GAME_ENDED"; payload: { results: RoundResult[] } }
-  | { type: "ROOM_STATE"; payload: { room: Room } }
-  | { type: "ERROR"; payload: { message: string } };
+import type {
+  GameStatus,
+  Player,
+  Room,
+  RoomMode,
+  RoundResult,
+  ServerEvent,
+} from "@secret-reputation/shared";
 
 export type { Room, Player, RoundResult, GameStatus, RoomMode, ServerEvent };
 
@@ -78,13 +16,14 @@ interface GameState {
   connecting: boolean;
   error: string | null;
   playerId: string | null;
+  reconnectToken: string | null;
   playerName: string;
   playerColor: string;
   room: Room | null;
 
   setConnection: (connected: boolean, connecting?: boolean) => void;
   setError: (error: string | null) => void;
-  setIdentity: (id: string, name: string, color: string) => void;
+  setIdentity: (id: string, name: string, color: string, reconnectToken: string | null) => void;
   setPlayerName: (name: string) => void;
   setPlayerColor: (color: string) => void;
   setRoom: (room: Room | null) => void;
@@ -92,6 +31,7 @@ interface GameState {
   removePlayer: (playerId: string) => void;
   updateVoteProgress: (submitted: number, required: number) => void;
   addResult: (result: RoundResult) => void;
+  setReconnectToken: (token: string | null) => void;
   setGameStatus: (status: GameStatus) => void;
   setCurrentRound: (round: number) => void;
   reset: () => void;
@@ -102,6 +42,7 @@ const initialState = {
   connecting: false,
   error: null as string | null,
   playerId: null as string | null,
+  reconnectToken: null as string | null,
   playerName: "",
   playerColor: PLAYER_COLORS[Math.floor(Math.random() * PLAYER_COLORS.length)],
   room: null as Room | null,
@@ -115,8 +56,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
   setError: (error: string | null) => set({ error }),
 
-  setIdentity: (id: string, name: string, color: string) =>
-    set({ playerId: id, playerName: name, playerColor: color }),
+  setIdentity: (id: string, name: string, color: string, reconnectToken: string | null) =>
+    set({ playerId: id, playerName: name, playerColor: color, reconnectToken }),
 
   setPlayerName: (name: string) => set({ playerName: name }),
 
@@ -171,6 +112,9 @@ export const useGameStore = create<GameState>()((set, get) => ({
       };
     }),
 
+  setReconnectToken: (token: string | null) =>
+    set({ reconnectToken: token }),
+
   setGameStatus: (status: GameStatus) =>
     set((state: GameState) => {
       if (!state.room) return state;
@@ -191,11 +135,21 @@ export function handleServerEvent(event: ServerEvent): void {
 
   switch (event.type) {
     case "ROOM_CREATED":
-      store.setIdentity(event.payload.playerId, store.playerName, store.playerColor);
+      store.setIdentity(
+        event.payload.playerId,
+        store.playerName,
+        store.playerColor,
+        event.payload.reconnectToken,
+      );
       store.setRoom(event.payload.room);
       break;
     case "ROOM_JOINED":
-      store.setIdentity(event.payload.playerId, store.playerName, store.playerColor);
+      store.setIdentity(
+        event.payload.playerId,
+        store.playerName,
+        store.playerColor,
+        event.payload.reconnectToken,
+      );
       store.setRoom(event.payload.room);
       break;
     case "PLAYER_JOINED":
@@ -219,12 +173,17 @@ export function handleServerEvent(event: ServerEvent): void {
       store.setGameStatus("voting");
       break;
     case "GAME_ENDED":
-      store.setRoom({ ...store.room!, results: event.payload.results, status: "ended" });
+      if (store.room) {
+        store.setRoom({ ...store.room, results: event.payload.results, status: "ended" });
+      }
       break;
     case "ROOM_STATE":
       store.setRoom(event.payload.room);
       break;
     case "ERROR":
+      if (event.payload.message === "Reconnect denied") {
+        store.setReconnectToken(null);
+      }
       store.setError(event.payload.message);
       break;
   }

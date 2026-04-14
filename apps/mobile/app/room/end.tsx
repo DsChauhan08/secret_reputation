@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Text, StyleSheet, FlatList } from "react-native";
 import { useRouter } from "expo-router";
 import { Screen, SoftButton, Card } from "../../src/components";
@@ -10,11 +10,19 @@ import type { RoundResult } from "../../src/store";
 export default function EndScreen() {
   const router = useRouter();
   const room = useGameStore((s) => s.room);
+  const playerId = useGameStore((s) => s.playerId);
   const reset = useGameStore((s) => s.reset);
+
+  const isHost = room?.hostId === playerId;
+
+  useEffect(() => {
+    if (room?.status === "lobby") router.replace("/room/lobby");
+  }, [room?.status, router]);
 
   if (!room) return null;
 
   const handlePlayAgain = () => {
+    if (!isHost) return;
     wsClient.send({ type: "PLAY_AGAIN", payload: {} as Record<string, never> });
   };
 
@@ -52,7 +60,11 @@ export default function EndScreen() {
       />
 
       <View style={{ paddingBottom: spacing.xxxl }}>
-        <SoftButton title="Play Again" onPress={handlePlayAgain} />
+        {isHost ? (
+          <SoftButton title="Play Again" onPress={handlePlayAgain} />
+        ) : (
+          <SoftButton title="Waiting for host..." onPress={() => {}} disabled />
+        )}
         <View style={{ height: spacing.md }} />
         <SoftButton title="Leave" onPress={handleLeave} variant="outline" color={colors.danger} />
       </View>

@@ -1,21 +1,30 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { Screen, SoftButton, CategoryCard, Card, Input } from "../../src/components";
+import { Screen, SoftButton, CategoryCard, Input } from "../../src/components";
 import { colors, typography, spacing, radii } from "../../src/theme";
 import { useGameStore } from "../../src/store";
 import { wsClient } from "../../src/ws";
-import { getCategoriesByMode, isContentSafe } from "../../src/gamedata";
-import type { Category } from "../../src/gamedata";
-import type { RoomMode } from "../../src/store";
+import {
+  addStoredCustomQuestion,
+  listStoredCustomQuestions,
+  type StoredCustomQuestion,
+} from "../../src/customQuestions";
+import {
+  getCategoriesByMode,
+  getRandomCategories,
+  normalizeCategoryText,
+  type Category,
+  type RoomMode,
+} from "@secret-reputation/shared";
 
 const MIN_CATEGORIES = 3;
 const MAX_CATEGORIES = 12;
 
 export default function CategoriesScreen() {
   const router = useRouter();
-  const room = useGameStore((s) => s.room);
+  const room = useGameStore((state) => state.room);
 
   const availableCategories = useMemo(() => {
     if (!room) return [];
@@ -24,88 +33,170 @@ export default function CategoriesScreen() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customText, setCustomText] = useState("");
-  const [customCategories, setCustomCategories] = useState<Category[]>([]);
   const [customError, setCustomError] = useState<string | null>(null);
   const [showCustom, setShowCustom] = useState(false);
+  const [storedCustom, setStoredCustom] = useState<StoredCustomQuestion[]>([]);
 
-  const allCategories = [...availableCategories, ...customCategories];
+  useEffect(() => {
+    listStoredCustomQuestions().then(setStoredCustom).catch(() => {
+      setStoredCustom([]);
+    });
+  }, []);
+
+  const customCategories = useMemo<Category[]>(
+    () =>
+      storedCustom.map((question) => ({
+        id: question.id,
+        text: question.text,
+        mode: (room?.mode ?? "normal-chaos") as RoomMode,
+        isCustom: true,
+      })),
+    [storedCustom, room?.mode],
+  );
+
+  const allCategories = useMemo(() => {
+    const map = new Map<string, Category>();
+    for (const category of [...availableCategories, ...customCategories]) {
+      if (!map.has(category.id)) map.set(category.id, category);
+    }
+    return Array.from(map.values());
+  }, [availableCategories, customCategories]);
+
   const selectedCount = selected.size;
   const canStart = selectedCount >= MIN_CATEGORIES && selectedCount <= MAX_CATEGORIES;
 
   const toggleCategory = (id: string) => {
     const next = new Set(selected);
-    if (next.has(id)) { next.delete(id); } else { if (next.size >= MAX_CATEGORIES) return; next.add(id); }
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      if (next.size >= MAX_CATEGORIES) return;
+      next.add(id);
+    }
     setSelected(next);
   };
 
   const handleShuffle = () => {
+    if (!room) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const shuffled = [...allCategories].sort(() => Math.random() - 0.5);
-    setSelected(new Set(shuffled.slice(0, 8).map((c) => c.id)));
+    const allBuiltInForMode = getCategoriesByMode(room.mode as RoomMode);
+    const builtInCount = Math.min(8, allBuiltInForMode.length);
+    const builtIn = getRandomCategories(room.mode as RoomMode, builtInCount).map((category) => category.id);
+    const custom = [...storedCustom]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, Math.max(0, 8 - builtIn.length))
+      .map((question) => question.id);
+    setSelected(new Set([...builtIn, ...custom].slice(0, 8)));
   };
 
-  const handleAddCustom = () => {
-    const text = customText.trim();
-    if (!text) return;
-    const check = isContentSafe(text);
-    if (!check.safe) { setCustomError(check.reason ?? "not allowed"); return; }
-    const cat: Category = { id: `custom_${Date.now()}`, text: text.toLowerCase(), mode: (room?.mode ?? "normal-chaos") as RoomMode, isCustom: true };
-    setCustomCategories((prev) => [...prev, cat]);
-    setSelected((prev) => new Set([...prev, cat.id]));
+  const handleAddCustom = async () => {
+    const result = await addStoredCustomQuestion(customText);
+    if (!result.ok) {
+      setCustomError(result.reason);
+      return;
+    }
+
+    setStoredCustom((previous) => {
+      if (previous.some((question) => question.id === result.question.id)) {
+        return previous;
+      }
+      return [result.question, ...previous].slice(0, 120);
+    });
+
+    setSelected((previous) => new Set([...previous, result.question.id]));
     setCustomText("");
     setCustomError(null);
   };
 
   const handleStart = () => {
-    wsClient.send({ type: "START_GAME", payload: { selectedCategoryIds: Array.from(selected) } });
+    const selectedIds = Array.from(selected);
+    const selectedCustomCategories = storedCustom
+      .filter((question) => selected.has(question.id))
+      .map((question) => ({ id: question.id, text: normalizeCategoryText(question.text) }));
+
+    wsClient.send({
+      type: "START_GAME",
+      payload: {
+        selectedCategoryIds: selectedIds,
+        customCategories: selectedCustomCategories,
+      },
+    });
   };
 
   useEffect(() => {
     if (room?.status === "voting") router.replace("/room/vote");
-  }, [room?.status]);
+  }, [room?.status, router]);
 
   if (!room) return null;
 
   return (
     <Screen>
       <View style={{ paddingTop: spacing.lg }}>
-        <Pressable onPress={() => router.back()}><Text style={styles.back}>Back</Text></Pressable>
+        <Pressable onPress={() => router.back()}>
+          <Text style={styles.back}>Back</Text>
+        </Pressable>
+
         <Text style={[typography.h1, { marginTop: spacing.lg }]}>Categories</Text>
         <Text style={[typography.caption, { marginTop: spacing.sm }]}>pick {MIN_CATEGORIES}-{MAX_CATEGORIES} for this round</Text>
 
         <View style={styles.controls}>
-          <Text style={[typography.bodyBold, { color: canStart ? colors.primary : colors.textMuted, flex: 1 }]}>
+          <Text style={[typography.bodyBold, { color: canStart ? colors.primary : colors.textMuted, flex: 1 }]}> 
             {selectedCount}/{MAX_CATEGORIES}
           </Text>
-          <Pressable onPress={handleShuffle} style={styles.controlBtn}><Text style={[typography.caption, { color: colors.primary }]}>Shuffle</Text></Pressable>
-          <Pressable onPress={() => setShowCustom(!showCustom)} style={styles.controlBtn}><Text style={[typography.caption, { color: colors.warm }]}>{showCustom ? "Hide" : "Custom"}</Text></Pressable>
+          <Pressable onPress={handleShuffle} style={styles.controlBtn}>
+            <Text style={[typography.caption, { color: colors.primary }]}>Shuffle</Text>
+          </Pressable>
+          <Pressable onPress={() => setShowCustom((value) => !value)} style={styles.controlBtn}>
+            <Text style={[typography.caption, { color: colors.warm }]}>{showCustom ? "Hide" : "Custom"}</Text>
+          </Pressable>
         </View>
       </View>
 
       {showCustom && (
         <View style={styles.customRow}>
-          <View style={{ flex: 1 }}><Input value={customText} onChangeText={(t: string) => { setCustomText(t); setCustomError(null); }} placeholder="most likely to..." maxLength={120} /></View>
-          <Pressable onPress={handleAddCustom} style={styles.addBtn}><Text style={{ color: "#FFF", fontWeight: "600", fontSize: 14 }}>Add</Text></Pressable>
+          <View style={{ flex: 1 }}>
+            <Input
+              value={customText}
+              onChangeText={(text: string) => {
+                setCustomText(text);
+                setCustomError(null);
+              }}
+              placeholder="most likely to..."
+              maxLength={120}
+            />
+          </View>
+          <Pressable onPress={handleAddCustom} style={styles.addBtn}>
+            <Text style={{ color: "#FFF", fontWeight: "600", fontSize: 14 }}>Add</Text>
+          </Pressable>
         </View>
       )}
+
       {customError && <Text style={styles.errorText}>{customError}</Text>}
+
+      {storedCustom.length > 0 && (
+        <Text style={[typography.small, { marginBottom: spacing.sm }]}>your saved questions are available every room</Text>
+      )}
 
       <FlatList
         data={allCategories}
-        keyExtractor={(c) => c.id}
+        keyExtractor={(category) => category.id}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: spacing.huge }}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <View style={{ marginBottom: spacing.sm }}>
-            <CategoryCard text={item.text} selected={selected.has(item.id)} onPress={() => toggleCategory(item.id)} />
+            <CategoryCard
+              text={item.text}
+              selected={selected.has(item.id)}
+              onPress={() => toggleCategory(item.id)}
+            />
           </View>
         )}
       />
 
       <View style={{ paddingBottom: spacing.xxxl }}>
         <SoftButton
-          title={canStart ? `Start Voting (${selectedCount})` : `Select ${MIN_CATEGORIES - selectedCount} more`}
+          title={canStart ? `Start Voting (${selectedCount})` : `Select ${Math.max(0, MIN_CATEGORIES - selectedCount)} more`}
           onPress={handleStart}
           disabled={!canStart}
         />
@@ -116,9 +207,33 @@ export default function CategoriesScreen() {
 
 const styles = StyleSheet.create({
   back: { ...typography.caption, color: colors.textMuted },
-  controls: { flexDirection: "row", alignItems: "center", gap: spacing.lg, marginTop: spacing.xl, marginBottom: spacing.lg },
-  controlBtn: { paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radii.sm, borderWidth: 1, borderColor: colors.cardBorder },
-  customRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md, alignItems: "center" },
-  addBtn: { backgroundColor: colors.primary, borderRadius: radii.md, paddingHorizontal: spacing.lg, height: 50, alignItems: "center", justifyContent: "center" },
+  controls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.lg,
+    marginTop: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  controlBtn: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  customRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    alignItems: "center",
+  },
+  addBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
+    height: 50,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   errorText: { ...typography.small, color: colors.danger, marginBottom: spacing.sm },
 });
