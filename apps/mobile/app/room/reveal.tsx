@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
 import { Screen, SoftButton } from "../../src/components";
 import { colors, typography, spacing, radii, shadow } from "../../src/theme";
 import { useGameStore } from "../../src/store";
@@ -41,7 +40,6 @@ export default function RevealScreen() {
         i++;
         setPhase(sequence[i]);
         fadeIn();
-        if (sequence[i] === "winner") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         advance();
       }, timings[sequence[i]]);
     };

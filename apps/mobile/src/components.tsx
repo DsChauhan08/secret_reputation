@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import type { ViewStyle, TextStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
 import { colors, spacing, radii, typography, shadow, PLAYER_COLORS } from "./theme";
 
 
@@ -62,7 +61,6 @@ export function SoftButton({
 }: SoftButtonProps) {
   const handlePress = () => {
     if (disabled || loading) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPress();
   };
 
@@ -203,7 +201,6 @@ export function PlayerChip({
     <Pressable
       onPress={() => {
         if (!onPress) return;
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress();
       }}
       disabled={!onPress}
@@ -263,7 +260,6 @@ export function ColorPicker({ selected, onSelect }: ColorPickerProps) {
         <Pressable
           key={c}
           onPress={() => {
-            Haptics.selectionAsync();
             onSelect(c);
           }}
           style={[
@@ -294,7 +290,6 @@ export function ModeCard({ title, description, selected, onPress, accentColor }:
   return (
     <Pressable
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress();
       }}
       style={({ pressed }) => [
@@ -324,7 +319,6 @@ export function CategoryCard({ text, selected, onPress }: CategoryCardProps) {
   return (
     <Pressable
       onPress={() => {
-        Haptics.selectionAsync();
         onPress();
       }}
       style={({ pressed }) => [

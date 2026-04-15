@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
 import { View, Text, StyleSheet, FlatList, Share, Pressable } from "react-native";
 import { useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
 import { Screen, SoftButton, PlayerChip, Card } from "../../src/components";
 import { colors, typography, spacing } from "../../src/theme";
 import { useGameStore } from "../../src/store";
@@ -31,7 +30,6 @@ export default function LobbyScreen() {
 
   const handleStart = () => {
     if (!isHost) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.push("/room/categories");
   };
 

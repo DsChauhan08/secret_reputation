@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable } from "react-native";
 import { useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
 import { Screen, SoftButton, CategoryCard, Input } from "../../src/components";
 import { colors, typography, spacing, radii } from "../../src/theme";
 import { useGameStore } from "../../src/store";
@@ -78,7 +77,6 @@ export default function CategoriesScreen() {
 
   const handleShuffle = () => {
     if (!room) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const allBuiltInForMode = getCategoriesByMode(room.mode as RoomMode);
     const builtInCount = Math.min(8, allBuiltInForMode.length);
     const builtIn = getRandomCategories(room.mode as RoomMode, builtInCount).map((category) => category.id);

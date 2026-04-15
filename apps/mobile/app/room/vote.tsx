@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, FlatList } from "react-native";
 import { useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
 import { Screen, SoftButton, PlayerChip, ProgressRing, Card } from "../../src/components";
 import { colors, typography, spacing } from "../../src/theme";
 import { useGameStore } from "../../src/store";
@@ -31,7 +30,6 @@ export default function VoteScreen() {
 
   const handleVote = () => {
     if (!votedFor || locked || !currentCategory) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     wsClient.send({ type: "SUBMIT_VOTE", payload: { categoryId: currentCategory.id, votedForId: votedFor } });
     setLocked(true);
   };
