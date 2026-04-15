@@ -8,7 +8,9 @@ import { useGameStore } from "../../src/store";
 import { wsClient } from "../../src/ws";
 import {
   addStoredCustomQuestion,
+  fetchServerQuestions,
   listStoredCustomQuestions,
+  saveQuestionToServer,
   type StoredCustomQuestion,
 } from "../../src/customQuestions";
 import {
@@ -35,12 +37,23 @@ export default function CategoriesScreen() {
   const [customText, setCustomText] = useState("");
   const [customError, setCustomError] = useState<string | null>(null);
   const [showCustom, setShowCustom] = useState(false);
+  const [chaosMode, setChaosMode] = useState(false);
+  const [shareWithCommunity, setShareWithCommunity] = useState(false);
   const [storedCustom, setStoredCustom] = useState<StoredCustomQuestion[]>([]);
 
   useEffect(() => {
-    listStoredCustomQuestions().then(setStoredCustom).catch(() => {
-      setStoredCustom([]);
-    });
+    Promise.all([listStoredCustomQuestions(), fetchServerQuestions()])
+      .then(([local, remote]) => {
+        const byText = new Map<string, StoredCustomQuestion>();
+        for (const item of [...remote, ...local]) {
+          const key = normalizeCategoryText(item.text);
+          if (!byText.has(key)) byText.set(key, item);
+        }
+        setStoredCustom(Array.from(byText.values()).sort((a, b) => b.createdAt - a.createdAt).slice(0, 140));
+      })
+      .catch(() => {
+        setStoredCustom([]);
+      });
   }, []);
 
   const customCategories = useMemo<Category[]>(
@@ -104,6 +117,11 @@ export default function CategoriesScreen() {
     });
 
     setSelected((previous) => new Set([...previous, result.question.id]));
+
+    if (shareWithCommunity) {
+      await saveQuestionToServer(result.question.text);
+    }
+
     setCustomText("");
     setCustomError(null);
   };
@@ -119,6 +137,7 @@ export default function CategoriesScreen() {
       payload: {
         selectedCategoryIds: selectedIds,
         customCategories: selectedCustomCategories,
+        enableChaos: chaosMode,
       },
     });
   };
@@ -149,6 +168,11 @@ export default function CategoriesScreen() {
           <Pressable onPress={() => setShowCustom((value) => !value)} style={styles.controlBtn}>
             <Text style={[typography.caption, { color: colors.warm }]}>{showCustom ? "Hide" : "Custom"}</Text>
           </Pressable>
+          <Pressable onPress={() => setChaosMode((value) => !value)} style={styles.controlBtn}>
+            <Text style={[typography.caption, { color: chaosMode ? colors.danger : colors.textMuted }]}>
+              {chaosMode ? "Chaos On" : "Chaos Off"}
+            </Text>
+          </Pressable>
         </View>
       </View>
 
@@ -169,6 +193,13 @@ export default function CategoriesScreen() {
             <Text style={{ color: "#FFF", fontWeight: "600", fontSize: 14 }}>Add</Text>
           </Pressable>
         </View>
+      )}
+
+      {showCustom && (
+        <Pressable onPress={() => setShareWithCommunity((value) => !value)} style={styles.shareOptInRow}>
+          <View style={[styles.optInBox, shareWithCommunity && styles.optInBoxActive]} />
+          <Text style={styles.shareOptInText}>Allow this question in future rooms (anonymous)</Text>
+        </Pressable>
       )}
 
       {customError && <Text style={styles.errorText}>{customError}</Text>}
@@ -238,4 +269,27 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   errorText: { ...typography.small, color: colors.danger, marginBottom: spacing.sm },
+  shareOptInRow: {
+    marginBottom: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  shareOptInText: {
+    ...typography.small,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  optInBox: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    backgroundColor: colors.card,
+  },
+  optInBoxActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
 });

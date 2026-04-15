@@ -1,5 +1,6 @@
 import {
   getCategoriesByMode,
+  getChaosCards,
   getRandomCategories,
   ALL_CATEGORIES,
   generateCommentary,
@@ -47,6 +48,10 @@ assert(
 
 const unhinged = getCategoriesByMode("unhinged");
 assert(unhinged.length === ALL_CATEGORIES.length, "unhinged includes all categories");
+
+const chaosCards = getChaosCards();
+assert(chaosCards.length >= 10, `chaos cards available (got ${chaosCards.length})`);
+assert(chaosCards.every((category) => category.isChaos === true), "chaos cards flagged as chaos");
 
 const random5 = getRandomCategories("normal-chaos", 5);
 assert(random5.length === 5, `getRandomCategories returns requested count (got ${random5.length})`);
@@ -108,6 +113,7 @@ function makeResult(winnerVotes: number, totalVotes: number, uniqueVoters: numbe
     tiedPlayerNames: [],
     tieVoteCount: 0,
     winningMethod: "majority",
+    isChaosRound: false,
     commentary: "",
     voteCounts,
   };
@@ -136,9 +142,17 @@ const tieCommentaryResult: RoundResult = {
   tiedPlayerNames: ["Winner", "Player2"],
   tieVoteCount: 3,
   winningMethod: "tie-break",
+  isChaosRound: false,
 };
 const commentary5 = generateCommentary(tieCommentaryResult);
 assert(typeof commentary5 === "string" && commentary5.length > 0, `tie-break generates commentary: "${commentary5}"`);
+
+const chaosCommentaryResult: RoundResult = {
+  ...makeResult(4, 9, 3),
+  isChaosRound: true,
+};
+const commentary6 = generateCommentary(chaosCommentaryResult);
+assert(typeof commentary6 === "string" && commentary6.length > 0, `chaos round generates commentary: "${commentary6}"`);
 
 // ============================================================
 // MODERATION

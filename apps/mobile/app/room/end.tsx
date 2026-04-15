@@ -1,11 +1,12 @@
-import React, { useEffect } from "react";
-import { View, Text, StyleSheet, FlatList } from "react-native";
+import React, { useEffect, useMemo } from "react";
+import { View, Text, StyleSheet, FlatList, Share } from "react-native";
 import { useRouter } from "expo-router";
 import { Screen, SoftButton, Card } from "../../src/components";
 import { colors, typography, spacing, radii, shadow } from "../../src/theme";
 import { useGameStore } from "../../src/store";
 import { wsClient } from "../../src/ws";
 import type { RoundResult } from "../../src/store";
+import { buildShareMessage } from "../../src/inviteLinks";
 
 export default function EndScreen() {
   const router = useRouter();
@@ -30,6 +31,26 @@ export default function EndScreen() {
     wsClient.disconnect();
     reset();
     router.replace("/");
+  };
+
+  const shouldShowRematchInvite = useMemo(() => {
+    if (room.results.length < 3) return false;
+    const seed = `${room.code}:${room.results.length}:${room.players.length}`;
+    let hash = 0;
+    for (let i = 0; i < seed.length; i += 1) {
+      hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+    }
+    return hash % 100 >= 45;
+  }, [room.code, room.results.length, room.players.length]);
+  const handleInviteRematch = async () => {
+    try {
+      await Share.share({
+        title: "Rematch?",
+        message: `${buildShareMessage(room.code)}\n\nRematch in 10 seconds? 👀`,
+      });
+    } catch {
+      // ignored
+    }
   };
 
   return (
@@ -66,6 +87,12 @@ export default function EndScreen() {
           <SoftButton title="Waiting for host..." onPress={() => {}} disabled />
         )}
         <View style={{ height: spacing.md }} />
+        {shouldShowRematchInvite && (
+          <>
+            <SoftButton title="Invite for rematch" onPress={handleInviteRematch} variant="outline" haptic="light" />
+            <View style={{ height: spacing.md }} />
+          </>
+        )}
         <SoftButton title="Leave" onPress={handleLeave} variant="outline" color={colors.danger} />
       </View>
     </Screen>

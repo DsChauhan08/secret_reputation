@@ -1,5 +1,6 @@
 import {
   generateCommentary,
+  getChaosCards,
   getCategoriesByMode,
   isContentSafe,
   normalizeCategoryText,
@@ -177,6 +178,7 @@ function mergeCategories(base: Category[], custom: Category[]): Category[] {
       text: normalizedText,
       mode: category.mode,
       isCustom: true,
+      isChaos: category.isChaos ?? false,
     });
   }
 
@@ -604,7 +606,7 @@ export class GameRoom implements DurableObject {
 
   private async handleStartGame(
     ws: WebSocket,
-    payload: { selectedCategoryIds: string[]; customCategories?: CustomCategoryInput[] },
+    payload: { selectedCategoryIds: string[]; customCategories?: CustomCategoryInput[]; enableChaos?: boolean },
   ): Promise<void> {
     if (!this.room) return;
 
@@ -625,12 +627,29 @@ export class GameRoom implements DurableObject {
       return;
     }
 
-    const mergedCategories = mergeCategories(getCategoriesByMode(this.room.mode), customCategoryResult.categories);
+    const chaosEnabled = payload.enableChaos === true;
+    const chaosPool = chaosEnabled ? getChaosCards() : [];
+    const mergedCategories = mergeCategories(getCategoriesByMode(this.room.mode), [
+      ...customCategoryResult.categories,
+      ...chaosPool,
+    ]);
     const categoryIdSet = new Set(mergedCategories.map((category) => category.id));
 
     const selectedCategoryIds = dedupe(payload.selectedCategoryIds)
       .filter((id) => categoryIdSet.has(id))
       .slice(0, MAX_ROUNDS);
+
+    if (chaosEnabled && selectedCategoryIds.length >= MIN_ROUNDS) {
+      const chaosCandidates = mergedCategories.filter(
+        (candidate) => candidate.isChaos && !selectedCategoryIds.includes(candidate.id),
+      );
+
+      if (chaosCandidates.length > 0) {
+        const picked = chaosCandidates[Math.floor(Math.random() * chaosCandidates.length)];
+        const insertAt = Math.max(1, Math.floor(selectedCategoryIds.length / 2));
+        selectedCategoryIds.splice(insertAt, 0, picked.id);
+      }
+    }
 
     if (selectedCategoryIds.length < MIN_ROUNDS) {
       this.sendTo(ws, {
@@ -863,6 +882,7 @@ export class GameRoom implements DurableObject {
       tiedPlayerNames: isTie ? tiedTop.map((candidate) => candidate.playerName) : [],
       tieVoteCount: isTie ? topCount : 0,
       winningMethod: isTie ? "tie-break" : winner.count === roundVotes.length ? "consensus" : "majority",
+      isChaosRound: Boolean(category.isChaos),
       commentary: "",
       voteCounts,
     };

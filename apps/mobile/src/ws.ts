@@ -7,7 +7,10 @@ type AllowedOutboundEvent =
   | { type: "CREATE_ROOM"; payload: { playerName: string; playerColor: string; roomName: string; mode: RoomMode } }
   | { type: "JOIN_ROOM"; payload: { code: string; playerName: string; playerColor: string } }
   | { type: "RECONNECT"; payload: { playerId: string; reconnectToken: string } }
-  | { type: "START_GAME"; payload: { selectedCategoryIds: string[]; customCategories?: CustomCategoryInput[] } }
+  | {
+      type: "START_GAME";
+      payload: { selectedCategoryIds: string[]; customCategories?: CustomCategoryInput[]; enableChaos?: boolean };
+    }
   | { type: "SUBMIT_VOTE"; payload: { categoryId: string; votedForId: string } }
   | { type: "NEXT_ROUND"; payload: Record<string, never> }
   | { type: "PLAY_AGAIN"; payload: Record<string, never> }

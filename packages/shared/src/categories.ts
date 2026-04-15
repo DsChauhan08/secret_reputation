@@ -219,11 +219,47 @@ const unhingedTexts = [
   "most likely to say 'trust the process' before disaster",
 ];
 
+const chaosCardTexts = [
+  "chaos card: who would survive a delhi metro meltdown at rajiv chowk",
+  "chaos card: who would start a meme page after one office meeting",
+  "chaos card: who would pretend to be on mute and still gossip on call",
+  "chaos card: who would become viral for one random reels comment",
+  "chaos card: who would negotiate best price in sarojini and still buy extra",
+  "chaos card: who would run late and still blame bangalore traffic vibes",
+  "chaos card: who would plan an impromptu goa trip and cancel at checkout",
+  "chaos card: who would have the spiciest chai-stall opinions",
+  "chaos card: who would drop a cryptic status and not explain",
+  "chaos card: who would turn one family function into breaking news",
+  "chaos card: who would start side hustle ideas during team standup",
+  "chaos card: who would survive solely on maggi and ambition",
+  "chaos card: who would make the best wedding dance entry unexpectedly",
+  "chaos card: who would dominate antakshari and still deny it",
+  "chaos card: who would lose in ludo and accuse everyone of cheating",
+  "chaos card: who would become motivational at 2am then disappear",
+  "chaos card: who would host a fantasy cricket league and ghost updates",
+  "chaos card: who would make one zomato order sound like a mission",
+  "chaos card: who would secretly track trends before anyone else",
+  "chaos card: who would be the first to say 'bhai scene kya hai' and vanish",
+  "chaos card: who would accidentally create a group and forget why",
+  "chaos card: who would make startup pitch decks for random ideas",
+  "chaos card: who would win argument by saying 'source: trust me bro'",
+  "chaos card: who would have too many screenshots for one story",
+  "chaos card: who would create drama and then send heart emoji",
+];
+
 const lightRoast: Category[] = lightRoastTexts.map((text) => createCategory(text, "light-roast"));
 const normalChaos: Category[] = normalChaosTexts.map((text) => createCategory(text, "normal-chaos"));
 const unhinged: Category[] = unhingedTexts.map((text) => createCategory(text, "unhinged"));
+const chaosCards: Category[] = chaosCardTexts.map((text) => ({
+  ...createCategory(text, "normal-chaos"),
+  isChaos: true,
+}));
 
 export const ALL_CATEGORIES: Category[] = [...lightRoast, ...normalChaos, ...unhinged];
+
+export function getChaosCards(): Category[] {
+  return chaosCards;
+}
 
 export function getCategoriesByMode(mode: RoomMode): Category[] {
   switch (mode) {

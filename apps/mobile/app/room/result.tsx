@@ -108,6 +108,12 @@ export default function ResultScreen() {
               </View>
             )}
 
+            {latestResult.isChaosRound && (
+              <View style={styles.chaosChip}>
+                <Text style={styles.chaosText}>CHAOS CARD ROUND</Text>
+              </View>
+            )}
+
             <View style={styles.votePillRow}>
               <View style={[styles.votePill, { borderColor: `${latestResult.winnerColor}66` }]}> 
                 <Text style={styles.votePillLabel}>{isTie ? "TIE-BREAK WINNER" : "TOP PICK"}</Text>
@@ -311,6 +317,22 @@ const styles = StyleSheet.create({
   tieText: {
     ...typography.caption,
     color: "#FEF3C7",
+  },
+  chaosChip: {
+    marginTop: spacing.md,
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(248,113,113,0.55)",
+    backgroundColor: "rgba(127,29,29,0.35)",
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
+  chaosText: {
+    color: "#FCA5A5",
+    fontSize: 11,
+    letterSpacing: 1.2,
+    fontWeight: "800",
   },
   statsRow: {
     marginTop: spacing.xl,

@@ -1,9 +1,12 @@
 import { GameRoom } from "./GameRoom";
+import { QuestionVault } from "./QuestionVault";
 
 export { GameRoom };
+export { QuestionVault };
 
 interface Env {
   GAME_ROOM: DurableObjectNamespace;
+  QUESTION_VAULT: DurableObjectNamespace;
 }
 
 const ALLOWED_ORIGINS = [
@@ -14,6 +17,10 @@ const ALLOWED_ORIGINS = [
 
 function roomIdFromCode(env: Env, code: string): DurableObjectId {
   return env.GAME_ROOM.idFromName(`room:${code.toUpperCase()}`);
+}
+
+function questionVaultId(env: Env): DurableObjectId {
+  return env.QUESTION_VAULT.idFromName("global-question-vault");
 }
 
 function corsHeaders(request?: Request): Record<string, string> {
@@ -178,6 +185,19 @@ export default {
       const id = roomIdFromCode(env, code);
       const stub = env.GAME_ROOM.get(id);
       return stub.fetch(new Request("http://internal/status"));
+    }
+
+    if (path === "/api/questions/save" || path === "/api/questions/list" || path === "/api/questions/cleanup") {
+      const id = questionVaultId(env);
+      const stub = env.QUESTION_VAULT.get(id);
+      const proxiedPath = path.replace("/api", "");
+      return stub.fetch(
+        new Request(`http://internal${proxiedPath}`, {
+          method: request.method,
+          headers: request.headers,
+          body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+        }),
+      );
     }
 
     return jsonResponse({ error: "Not found" }, 404, request);

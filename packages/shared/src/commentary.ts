@@ -42,6 +42,13 @@ const TIE_LINES = [
   "The room split down the middle. Brutal tie-break.",
 ];
 
+const CHAOS_LINES = [
+  "Chaos Card activated. Nobody is safe.",
+  "This round was pure disorder and somehow still accurate.",
+  "Chaos round delivered. Emotional damage everywhere.",
+  "Special round, special mess.",
+];
+
 const GENERIC_LINES = [
   "The room has decided.",
   "Accept this and move on.",
@@ -56,6 +63,10 @@ const GENERIC_LINES = [
 ];
 
 export function generateCommentary(result: RoundResult): string {
+  if (result.isChaosRound) {
+    return CHAOS_LINES[Math.floor(Math.random() * CHAOS_LINES.length)];
+  }
+
   const { winnerVotes, totalVotes, voteCounts } = result;
   if (result.isTie) {
     return TIE_LINES[Math.floor(Math.random() * TIE_LINES.length)];

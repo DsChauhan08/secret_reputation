@@ -18,6 +18,7 @@ export interface Category {
   text: string;
   mode: RoomMode;
   isCustom: boolean;
+  isChaos?: boolean;
 }
 
 export interface CustomCategoryInput {
@@ -54,6 +55,7 @@ export interface RoundResult {
   tiedPlayerNames?: string[];
   tieVoteCount?: number;
   winningMethod?: "majority" | "consensus" | "tie-break";
+  isChaosRound?: boolean;
   commentary: string;
   voteCounts: VoteCount[];
 }
@@ -84,7 +86,10 @@ export type ClientEvent =
   | { type: "CREATE_ROOM"; payload: { playerName: string; playerColor: string; roomName: string; mode: RoomMode } }
   | { type: "JOIN_ROOM"; payload: { code: string; playerName: string; playerColor: string } }
   | { type: "RECONNECT"; payload: { playerId: string; reconnectToken: string } }
-  | { type: "START_GAME"; payload: { selectedCategoryIds: string[]; customCategories?: CustomCategoryInput[] } }
+  | {
+      type: "START_GAME";
+      payload: { selectedCategoryIds: string[]; customCategories?: CustomCategoryInput[]; enableChaos?: boolean };
+    }
   | { type: "SUBMIT_VOTE"; payload: { categoryId: string; votedForId: string } }
   | { type: "NEXT_ROUND"; payload: {} }
   | { type: "PLAY_AGAIN"; payload: {} }

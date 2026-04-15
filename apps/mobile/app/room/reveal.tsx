@@ -13,14 +13,20 @@ export default function RevealScreen() {
   const router = useRouter();
   const room = useGameStore((s) => s.room);
   const [phase, setPhase] = useState<RevealPhase>("category");
+  const [countdown, setCountdown] = useState(5);
   const [fadeAnim] = useState(() => new Animated.Value(0));
+  const [scaleAnim] = useState(() => new Animated.Value(0.92));
   const cancelledRef = useRef(false);
 
   const latestResult = room?.results?.[room.results.length - 1];
 
   const fadeIn = () => {
     fadeAnim.setValue(0);
-    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+    scaleAnim.setValue(0.92);
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 6, tension: 70, useNativeDriver: true }),
+    ]).start();
   };
 
   useEffect(() => {
@@ -30,7 +36,12 @@ export default function RevealScreen() {
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const timings: Record<RevealPhase, number> = {
-      category: 2000, countdown: 1500, winner: 3000, commentary: 2500, stats: 3000, next: 0,
+      category: 1500,
+      countdown: 5000,
+      winner: 3200,
+      commentary: 2600,
+      stats: 3200,
+      next: 0,
     };
     const sequence: RevealPhase[] = ["category", "countdown", "winner", "commentary", "stats", "next"];
     let i = 0;
@@ -49,12 +60,22 @@ export default function RevealScreen() {
     };
 
     setPhase("category");
+    setCountdown(5);
     fadeIn();
+
+    let countdownTimer: ReturnType<typeof setInterval> | null = null;
+    countdownTimer = setInterval(() => {
+      setCountdown((current) => (current <= 1 ? 1 : current - 1));
+    }, 1000);
+
     advance();
     return () => {
       cancelledRef.current = true;
       if (timer) {
         clearTimeout(timer);
+      }
+      if (countdownTimer) {
+        clearInterval(countdownTimer);
       }
     };
   }, [latestResult?.categoryId]);
@@ -80,7 +101,7 @@ export default function RevealScreen() {
 
   return (
     <Screen style={styles.container}>
-      <Animated.View style={[styles.center, { opacity: fadeAnim }]}>
+      <Animated.View style={[styles.center, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}> 
         {phase === "category" && (
           <View>
             <Text style={[typography.small, { color: colors.textMuted, letterSpacing: 1.5, textAlign: "center" }]}>THE CATEGORY</Text>
@@ -89,7 +110,10 @@ export default function RevealScreen() {
         )}
 
         {phase === "countdown" && (
-          <Text style={[typography.display, { color: colors.primary, textAlign: "center" }]}>...</Text>
+          <View style={styles.countdownWrap}>
+            <Text style={[typography.small, { color: colors.textMuted, letterSpacing: 1.3 }]}>building suspense...</Text>
+            <Text style={[typography.display, { color: colors.primary, textAlign: "center" }]}>{countdown}</Text>
+          </View>
         )}
 
         {phase === "winner" && (
@@ -98,7 +122,10 @@ export default function RevealScreen() {
               <Text style={styles.winnerAvatarText}>{latestResult.winnerName.charAt(0).toUpperCase()}</Text>
             </View>
             <Text style={[typography.h1, { marginTop: spacing.lg }]}>{latestResult.winnerName}</Text>
-            <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.textMuted }]}>
+            {latestResult.isTie && (
+              <Text style={styles.tieChip}>tie-break used • {(latestResult.tiedPlayerNames ?? []).join(" vs ")}</Text>
+            )}
+            <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.textMuted }]}> 
               {latestResult.winnerVotes} of {latestResult.totalVotes} votes
             </Text>
           </View>
@@ -147,8 +174,15 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     ...shadow.lg,
   },
+  countdownWrap: { alignItems: "center", gap: spacing.sm },
   winnerAvatar: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
   winnerAvatarText: { color: "#FFF", fontSize: 28, fontWeight: "800" },
+  tieChip: {
+    ...typography.small,
+    marginTop: spacing.sm,
+    color: "#F59E0B",
+    fontWeight: "700",
+  },
   statRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm, width: "100%" },
   statDot: { width: 12, height: 12, borderRadius: 6 },
   footer: { width: "100%", paddingBottom: spacing.xxxl },

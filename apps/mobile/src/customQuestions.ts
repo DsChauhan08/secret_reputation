@@ -1,5 +1,6 @@
 import { isContentSafe, normalizeCategoryText } from "./gamedata";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getBackendBaseUrls } from "./ws";
 
 export interface StoredCustomQuestion {
   id: string;
@@ -18,6 +19,8 @@ const STORAGE_KEY = "secret-reputation:custom-questions:v1";
 const MAX_STORED_QUESTIONS = 120;
 
 let fallbackMemory: string | null = null;
+
+const { httpBaseUrl } = getBackendBaseUrls();
 
 function normalizeQuestion(text: string): string {
   return normalizeCategoryText(text);
@@ -109,4 +112,51 @@ export async function addStoredCustomQuestion(
   await writeAll(next);
 
   return { ok: true, question };
+}
+
+export async function saveQuestionToServer(
+  text: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const normalized = normalizeQuestion(text);
+  const moderation = isContentSafe(normalized);
+  if (!moderation.safe) {
+    return { ok: false, reason: moderation.reason ?? "Question not allowed" };
+  }
+
+  try {
+    const response = await fetch(`${httpBaseUrl}/api/questions/save`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: normalized, consent: true }),
+    });
+
+    const data = (await response.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
+    if (!response.ok || !data?.ok) {
+      return { ok: false, reason: data?.message ?? "Could not save question" };
+    }
+
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "Network error while saving question" };
+  }
+}
+
+export async function fetchServerQuestions(): Promise<StoredCustomQuestion[]> {
+  try {
+    const response = await fetch(`${httpBaseUrl}/api/questions/list`);
+    const data = (await response.json().catch(() => null)) as
+      | { ok?: boolean; questions?: StoredCustomQuestion[] }
+      | null;
+    if (!response.ok || !data?.ok || !Array.isArray(data.questions)) return [];
+
+    return data.questions
+      .map((item) => ({
+        id: typeof item.id === "string" ? item.id : "",
+        text: normalizeQuestion(typeof item.text === "string" ? item.text : ""),
+        createdAt: typeof item.createdAt === "number" ? item.createdAt : Date.now(),
+      }))
+      .filter((item) => Boolean(item.id) && Boolean(item.text));
+  } catch {
+    return [];
+  }
 }

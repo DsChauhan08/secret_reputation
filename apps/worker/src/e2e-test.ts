@@ -612,6 +612,58 @@ async function testCustomCategories() {
   p3Ws.close();
 }
 
+async function testChaosCardRound() {
+  console.log("\n🎲 GAMEFEEL: Chaos card insertion + metadata");
+  const code = randomCode();
+
+  const hostWs = await connectWS(code);
+  send(hostWs, {
+    type: "CREATE_ROOM",
+    payload: { playerName: "Host", playerColor: "#845EC2", roomName: "Chaos Test", mode: "normal-chaos" },
+  });
+  const created = await waitForMessage(hostWs, "ROOM_CREATED");
+
+  const p2Notif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p2Ws = await connectWS(code);
+  send(p2Ws, { type: "JOIN_ROOM", payload: { code, playerName: "P2", playerColor: "#FF8066" } });
+  await waitForMessage(p2Ws, "ROOM_JOINED");
+  await p2Notif;
+
+  const p3Notif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p3Ws = await connectWS(code);
+  send(p3Ws, { type: "JOIN_ROOM", payload: { code, playerName: "P3", playerColor: "#4B4453" } });
+  await waitForMessage(p3Ws, "ROOM_JOINED");
+  await p3Notif;
+
+  const selected = created.payload.room.categories.slice(0, 3).map((c: any) => c.id);
+  const startedHost = waitForMessage(hostWs, "GAME_STARTED");
+  const startedP2 = waitForMessage(p2Ws, "GAME_STARTED");
+
+  send(hostWs, {
+    type: "START_GAME",
+    payload: {
+      selectedCategoryIds: selected,
+      enableChaos: true,
+    },
+  });
+
+  const started = await startedHost;
+  await startedP2;
+
+  const chaosCount = started.payload.room.categories.filter((c: any) => c.isChaos).length;
+  assert(chaosCount > 0, "Chaos cards included in room category pool");
+  assert(started.payload.room.totalRounds >= 4, "Chaos enabled adds extra round");
+
+  const selectedRoundIds = started.payload.room.selectedCategoryIds as string[];
+  const categoriesById = new Map(started.payload.room.categories.map((c: any) => [c.id, c]));
+  const hasChaosRound = selectedRoundIds.some((id) => categoriesById.get(id)?.isChaos === true);
+  assert(hasChaosRound, "Selected rounds include at least one chaos card");
+
+  hostWs.close();
+  p2Ws.close();
+  p3Ws.close();
+}
+
 async function testCustomCategoryModeration() {
   console.log("\n🔒 SECURITY: Custom category moderation");
   const code = randomCode();
@@ -650,6 +702,43 @@ async function testCustomCategoryModeration() {
   p3Ws.close();
 }
 
+async function testQuestionVault() {
+  console.log("\n🗂️  FEATURE: Opt-in shared question vault");
+
+  const saveRes = await fetch(`${HTTP_URL}/api/questions/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: "most likely to make plans around chai and still be late",
+      consent: true,
+    }),
+  });
+  const saveBody = await saveRes.json();
+  assert(saveRes.status === 201, "Question save endpoint returns 201");
+  assert(saveBody.ok === true, "Question saved with consent");
+
+  const noConsentRes = await fetch(`${HTTP_URL}/api/questions/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: "most likely to skip context in group chat",
+      consent: false,
+    }),
+  });
+  assert(noConsentRes.status === 400, "Question save rejected without consent");
+
+  const listRes = await fetch(`${HTTP_URL}/api/questions/list`);
+  const listBody = await listRes.json();
+  assert(listRes.status === 200, "Question list endpoint returns 200");
+  assert(Array.isArray(listBody.questions), "Question list returns array");
+  assert(
+    listBody.questions.some((entry: { text: string }) =>
+      entry.text.includes("most likely to make plans around chai and still be late"),
+    ),
+    "Saved question appears in list",
+  );
+}
+
 async function main() {
   console.log("═══════════════════════════════════════════");
   console.log("  SECRET REPUTATION — E2E TEST SUITE v2");
@@ -667,6 +756,7 @@ async function main() {
     await testJoinNonexistentRoom();
     await testReconnectFlow();
     await testCustomCategories();
+    await testChaosCardRound();
     await testFullGameFlow();
     await testSecuritySelfVote();
     await testSecurityNonHostStart();
@@ -675,6 +765,7 @@ async function main() {
     await testSecurityInvalidJSON();
     await testSecurityRoomFull();
     await testCustomCategoryModeration();
+    await testQuestionVault();
   } catch (err) {
     console.error("\n💥 FATAL ERROR:", err);
     failed++;
