@@ -103,6 +103,11 @@ function makeResult(winnerVotes: number, totalVotes: number, uniqueVoters: numbe
     runnerId: null,
     runnerName: null,
     runnerVotes: 0,
+    isTie: false,
+    tiedPlayerIds: [],
+    tiedPlayerNames: [],
+    tieVoteCount: 0,
+    winningMethod: "majority",
     commentary: "",
     voteCounts,
   };
@@ -123,6 +128,17 @@ assert(typeof commentary3 === "string" && commentary3.length > 0, `close race ge
 const splitResult = makeResult(3, 10, 5);
 const commentary4 = generateCommentary(splitResult);
 assert(typeof commentary4 === "string" && commentary4.length > 0, `split generates commentary: "${commentary4}"`);
+
+const tieCommentaryResult: RoundResult = {
+  ...makeResult(3, 10, 3),
+  isTie: true,
+  tiedPlayerIds: ["p1", "p2"],
+  tiedPlayerNames: ["Winner", "Player2"],
+  tieVoteCount: 3,
+  winningMethod: "tie-break",
+};
+const commentary5 = generateCommentary(tieCommentaryResult);
+assert(typeof commentary5 === "string" && commentary5.length > 0, `tie-break generates commentary: "${commentary5}"`);
 
 // ============================================================
 // MODERATION

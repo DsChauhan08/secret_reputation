@@ -9,7 +9,26 @@ import {
 } from "react-native";
 import type { ViewStyle, TextStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
 import { colors, spacing, radii, typography, shadow, PLAYER_COLORS } from "./theme";
+
+type HapticKind = "none" | "light" | "selection" | "success";
+
+function triggerHaptic(kind: HapticKind): void {
+  if (kind === "none") return;
+
+  if (kind === "selection") {
+    void Haptics.selectionAsync().catch(() => {});
+    return;
+  }
+
+  if (kind === "success") {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    return;
+  }
+
+  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+}
 
 
 interface ScreenProps {
@@ -46,6 +65,7 @@ interface SoftButtonProps {
   variant?: "filled" | "outline" | "ghost";
   size?: "sm" | "md" | "lg";
   style?: ViewStyle;
+  haptic?: HapticKind;
 }
 
 export function SoftButton({
@@ -58,9 +78,11 @@ export function SoftButton({
   variant = "filled",
   size = "lg",
   style,
+  haptic = "none",
 }: SoftButtonProps) {
   const handlePress = () => {
     if (disabled || loading) return;
+    triggerHaptic(haptic);
     onPress();
   };
 
@@ -179,6 +201,7 @@ interface PlayerChipProps {
   selected?: boolean;
   onPress?: () => void;
   size?: "sm" | "md" | "lg";
+  haptic?: HapticKind;
 }
 
 export function PlayerChip({
@@ -188,6 +211,7 @@ export function PlayerChip({
   selected = false,
   onPress,
   size = "md",
+  haptic = "none",
 }: PlayerChipProps) {
   const sizes: Record<string, { avatar: number; font: number; pad: number }> = {
     sm: { avatar: 30, font: 13, pad: spacing.sm },
@@ -201,6 +225,7 @@ export function PlayerChip({
     <Pressable
       onPress={() => {
         if (!onPress) return;
+        triggerHaptic(haptic);
         onPress();
       }}
       disabled={!onPress}
@@ -260,6 +285,7 @@ export function ColorPicker({ selected, onSelect }: ColorPickerProps) {
         <Pressable
           key={c}
           onPress={() => {
+            triggerHaptic("selection");
             onSelect(c);
           }}
           style={[
@@ -284,12 +310,14 @@ interface ModeCardProps {
   selected: boolean;
   onPress: () => void;
   accentColor: string;
+  haptic?: HapticKind;
 }
 
-export function ModeCard({ title, description, selected, onPress, accentColor }: ModeCardProps) {
+export function ModeCard({ title, description, selected, onPress, accentColor, haptic = "light" }: ModeCardProps) {
   return (
     <Pressable
       onPress={() => {
+        triggerHaptic(haptic);
         onPress();
       }}
       style={({ pressed }) => [
@@ -313,12 +341,14 @@ interface CategoryCardProps {
   text: string;
   selected: boolean;
   onPress: () => void;
+  haptic?: HapticKind;
 }
 
-export function CategoryCard({ text, selected, onPress }: CategoryCardProps) {
+export function CategoryCard({ text, selected, onPress, haptic = "selection" }: CategoryCardProps) {
   return (
     <Pressable
       onPress={() => {
+        triggerHaptic(haptic);
         onPress();
       }}
       style={({ pressed }) => [

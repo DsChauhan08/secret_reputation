@@ -34,6 +34,14 @@ const SPLIT_LINES = [
   "The votes scattered like a crime scene.",
 ];
 
+const TIE_LINES = [
+  "Dead heat. The room had to break the tie.",
+  "Too close to call. Chaos picked a winner.",
+  "Tie on top. Fate flipped the coin.",
+  "Equal firepower. One name still had to take it.",
+  "The room split down the middle. Brutal tie-break.",
+];
+
 const GENERIC_LINES = [
   "The room has decided.",
   "Accept this and move on.",
@@ -49,6 +57,10 @@ const GENERIC_LINES = [
 
 export function generateCommentary(result: RoundResult): string {
   const { winnerVotes, totalVotes, voteCounts } = result;
+  if (result.isTie) {
+    return TIE_LINES[Math.floor(Math.random() * TIE_LINES.length)];
+  }
+
   const ratio = winnerVotes / totalVotes;
   const uniqueVoted = voteCounts.filter((vc) => vc.count > 0).length;
 

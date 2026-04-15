@@ -49,6 +49,11 @@ export interface RoundResult {
   runnerId: string | null;
   runnerName: string | null;
   runnerVotes: number;
+  isTie?: boolean;
+  tiedPlayerIds?: string[];
+  tiedPlayerNames?: string[];
+  tieVoteCount?: number;
+  winningMethod?: "majority" | "consensus" | "tie-break";
   commentary: string;
   voteCounts: VoteCount[];
 }

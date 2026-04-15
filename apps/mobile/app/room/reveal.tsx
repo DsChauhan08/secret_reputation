@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
 import { Screen, SoftButton } from "../../src/components";
 import { colors, typography, spacing, radii, shadow } from "../../src/theme";
 import { useGameStore } from "../../src/store";
@@ -40,6 +41,9 @@ export default function RevealScreen() {
         i++;
         setPhase(sequence[i]);
         fadeIn();
+        if (sequence[i] === "winner") {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        }
         advance();
       }, timings[sequence[i]]);
     };
@@ -121,9 +125,9 @@ export default function RevealScreen() {
 
         {phase === "next" && (
           <View style={styles.footer}>
-            <SoftButton title="View Result Card" onPress={handleViewCard} />
+            <SoftButton title="View Result Card" onPress={handleViewCard} haptic="light" />
             <View style={{ height: spacing.md }} />
-            {isHost && <SoftButton title="Next Round" onPress={handleContinue} variant="outline" />}
+            {isHost && <SoftButton title="Next Round" onPress={handleContinue} variant="outline" haptic="success" />}
           </View>
         )}
       </Animated.View>

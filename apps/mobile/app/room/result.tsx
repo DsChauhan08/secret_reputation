@@ -30,6 +30,8 @@ export default function ResultScreen() {
   const viewShotRef = useRef<ViewShot>(null);
 
   const latestResult = room?.results?.[room.results.length - 1];
+  const isTie = Boolean(latestResult?.isTie);
+  const tiedNames = latestResult?.tiedPlayerNames ?? [];
   const ownVoteCount = useMemo(() => {
     if (!latestResult || !playerId) return null;
     return latestResult.voteCounts.find((voteCount) => voteCount.playerId === playerId)?.count ?? 0;
@@ -38,7 +40,11 @@ export default function ResultScreen() {
   if (!room || !latestResult) return null;
 
   const cardWidth = Math.min(SCREEN_WIDTH - spacing.xl * 2, 460);
-  const headline = ownVoteCount && ownVoteCount > 0 ? "you got called out" : "you survived this one";
+  const headline = isTie
+    ? "tie-break drama"
+    : ownVoteCount && ownVoteCount > 0
+      ? "you got called out"
+      : "you survived this one";
 
   const handleShare = async () => {
     const shareMessage = buildShareMessage(room.code);
@@ -80,7 +86,7 @@ export default function ResultScreen() {
           }}
         >
           <LinearGradient
-            colors={["#09090F", "#16162A", "#2A1C4A", "#4C1D95"]}
+            colors={isTie ? ["#1B1B2F", "#2E1065", "#831843", "#6D28D9"] : ["#09090F", "#16162A", "#2A1C4A", "#4C1D95"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={[styles.shareCard, { width: cardWidth }]}
@@ -93,9 +99,18 @@ export default function ResultScreen() {
             <Text style={styles.heroTitle}>{headline}</Text>
             <Text style={styles.heroQuestion}>{latestResult.categoryText}</Text>
 
+            {isTie && (
+              <View style={styles.tieBanner}>
+                <Text style={styles.tieBadge}>TIE-BREAK</Text>
+                <Text style={styles.tieText}>
+                  {tiedNames.slice(0, 3).join(" vs ")} tied at {latestResult.tieVoteCount ?? latestResult.winnerVotes} votes
+                </Text>
+              </View>
+            )}
+
             <View style={styles.votePillRow}>
-              <View style={[styles.votePill, { borderColor: `${latestResult.winnerColor}66` }]}>
-                <Text style={styles.votePillLabel}>TOP PICK</Text>
+              <View style={[styles.votePill, { borderColor: `${latestResult.winnerColor}66` }]}> 
+                <Text style={styles.votePillLabel}>{isTie ? "TIE-BREAK WINNER" : "TOP PICK"}</Text>
                 <View style={styles.voteWinnerRow}>
                   <View
                     style={[
@@ -112,6 +127,9 @@ export default function ResultScreen() {
                     <Text style={styles.voteMeta}>
                       {latestResult.winnerVotes}/{latestResult.totalVotes} votes
                     </Text>
+                    {isTie && (
+                      <Text style={styles.tieSubMeta}>won after tie with {tiedNames.length} players</Text>
+                    )}
                   </View>
                 </View>
               </View>
@@ -139,6 +157,26 @@ export default function ResultScreen() {
               “{latestResult.commentary}”
             </Text>
 
+            <View style={styles.sparklineRow}>
+              {latestResult.voteCounts.slice(0, 6).map((voteCount) => (
+                <View key={voteCount.playerId} style={styles.sparkItem}>
+                  <Text style={styles.sparkName}>{voteCount.playerName.slice(0, 5).toUpperCase()}</Text>
+                  <View style={[styles.sparkBarTrack]}>
+                    <View
+                      style={[
+                        styles.sparkBar,
+                        {
+                          width: `${latestResult.totalVotes > 0 ? Math.max(8, (voteCount.count / latestResult.totalVotes) * 100) : 8}%`,
+                          backgroundColor: voteCount.playerColor,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.sparkCount}>{voteCount.count}</Text>
+                </View>
+              ))}
+            </View>
+
             <View style={styles.footerRow}>
               <Text style={styles.footerCode}>{room.code}</Text>
               <Text style={styles.footerCta}>JOIN THE ROOM</Text>
@@ -148,12 +186,13 @@ export default function ResultScreen() {
       </View>
 
       <View style={{ paddingBottom: spacing.xxxl }}>
-        <SoftButton title="Share to Stories" onPress={handleShare} />
+        <SoftButton title="Share to Stories" onPress={handleShare} haptic="success" />
         <View style={{ height: spacing.md }} />
         <SoftButton
           title="Back"
           onPress={() => router.back()}
           variant="outline"
+          haptic="light"
         />
       </View>
     </Screen>
@@ -248,6 +287,31 @@ const styles = StyleSheet.create({
     color: "#CBD5E1",
     marginTop: 2,
   },
+  tieSubMeta: {
+    ...typography.small,
+    color: "#FBCFE8",
+    marginTop: 2,
+  },
+  tieBanner: {
+    marginTop: spacing.lg,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.45)",
+    borderRadius: 14,
+    backgroundColor: "rgba(251,191,36,0.14)",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs,
+  },
+  tieBadge: {
+    color: "#FDE68A",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.3,
+  },
+  tieText: {
+    ...typography.caption,
+    color: "#FEF3C7",
+  },
   statsRow: {
     marginTop: spacing.xl,
     flexDirection: "row",
@@ -280,6 +344,40 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxl,
     fontStyle: "italic",
     lineHeight: 24,
+  },
+  sparklineRow: {
+    marginTop: spacing.xl,
+    gap: spacing.sm,
+  },
+  sparkItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  sparkName: {
+    width: 52,
+    color: "#C4B5FD",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+  },
+  sparkBarTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    overflow: "hidden",
+  },
+  sparkBar: {
+    height: 8,
+    borderRadius: 999,
+  },
+  sparkCount: {
+    width: 20,
+    textAlign: "right",
+    color: "#E2E8F0",
+    fontWeight: "700",
+    fontSize: 12,
   },
   footerRow: {
     marginTop: spacing.xxl,

@@ -88,6 +88,7 @@ export default function LobbyScreen() {
             title={canStart ? "Choose Categories" : `Need ${3 - room.players.length} more`}
             onPress={handleStart}
             disabled={!canStart}
+            haptic="success"
           />
         ) : (
           <Text style={[typography.caption, { textAlign: "center", color: colors.textMuted }]}>

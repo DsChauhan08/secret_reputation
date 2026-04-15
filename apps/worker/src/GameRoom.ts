@@ -15,6 +15,15 @@ import {
   type VoteCount,
 } from "@secret-reputation/shared";
 
+function pickTieWinner(candidates: VoteCount[], categoryId: string): VoteCount {
+  const seed = `${categoryId}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  return candidates[hash % candidates.length];
+}
+
 const MAX_PLAYERS = 10;
 const MIN_PLAYERS = 3;
 const MIN_ROUNDS = 3;
@@ -826,10 +835,17 @@ export class GameRoom implements DurableObject {
 
     voteCounts.sort((a, b) => b.count - a.count || a.playerName.localeCompare(b.playerName));
 
-    const winner = voteCounts[0];
-    if (!winner) return;
+    const winnerCandidate = voteCounts[0];
+    if (!winnerCandidate) return;
 
-    const runner = voteCounts.length > 1 && voteCounts[1].count > 0 ? voteCounts[1] : null;
+    const topCount = winnerCandidate.count;
+    const tiedTop = voteCounts.filter((candidate) => candidate.count === topCount && topCount > 0);
+    const isTie = tiedTop.length > 1;
+    const winner = isTie ? pickTieWinner(tiedTop, categoryId) : winnerCandidate;
+
+    const runner = voteCounts
+      .filter((candidate) => candidate.playerId !== winner.playerId)
+      .find((candidate) => candidate.count > 0) ?? null;
 
     const result: RoundResult = {
       categoryId,
@@ -842,6 +858,11 @@ export class GameRoom implements DurableObject {
       runnerId: runner?.playerId ?? null,
       runnerName: runner?.playerName ?? null,
       runnerVotes: runner?.count ?? 0,
+      isTie,
+      tiedPlayerIds: isTie ? tiedTop.map((candidate) => candidate.playerId) : [],
+      tiedPlayerNames: isTie ? tiedTop.map((candidate) => candidate.playerName) : [],
+      tieVoteCount: isTie ? topCount : 0,
+      winningMethod: isTie ? "tie-break" : winner.count === roundVotes.length ? "consensus" : "majority",
       commentary: "",
       voteCounts,
     };
