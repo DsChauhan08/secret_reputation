@@ -5,7 +5,10 @@
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
-    "ios": "expo start --ios"
+    "ios": "expo start --ios",
+    "build:android:preview": "eas build --platform android --profile preview --non-interactive",
+    "build:android:production": "eas build --platform android --profile production --non-interactive",
+    "build:ios:production": "eas build --platform ios --profile production --non-interactive"
   },
   "dependencies": {
     "@secret-reputation/shared": "*",

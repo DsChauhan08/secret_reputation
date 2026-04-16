@@ -39,3 +39,58 @@ Because everyone has a secret reputation among their friends, and this game is t
 ---
 
 *This application relies on a Cloudflare Workers backend and a React Native (Expo) frontend.*
+
+## Release Guide (Android APK/AAB + iOS + OSS Store)
+
+### 1) Deploy backend worker
+From `apps/worker`:
+
+```bash
+bun x wrangler deploy
+```
+
+### 2) Log in to Expo EAS
+From `apps/mobile`:
+
+```bash
+bun x eas-cli login
+```
+
+### 3) Build release artifacts
+From `apps/mobile`:
+
+```bash
+# Android internal testing APK
+bun run build:android:preview
+
+# Android production AAB
+bun run build:android:production
+
+# iOS production archive
+bun run build:ios:production
+```
+
+### 4) Create GitHub release
+After EAS build URLs/artifacts are available, create release notes and attach APK (or include build URLs):
+
+```bash
+gh release create v1.0.0 \
+  --title "Secret Reputation v1.0.0" \
+  --notes "Initial public release with chaos cards, tie-break transparency, and shared custom question vault." \
+  <path-to-apk>
+```
+
+### 5) Open-source app store publication
+
+#### Recommended fast path: IzzyOnDroid
+- Host signed APK in GitHub Releases.
+- Ensure app is FOSS and source is public (already true).
+- Submit repository + latest release URL to IzzyOnDroid index maintainers.
+
+#### F-Droid readiness checklist
+- Stable, reproducible tag-based builds.
+- No proprietary tracking SDKs.
+- Build metadata and recipe (`metadata/*.yml`) prepared in F-Droid data repo.
+- Keep release tags and changelogs consistent.
+
+Note: iOS binaries are distributed through TestFlight/App Store Connect, not open-source Android stores.

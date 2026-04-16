@@ -30,5 +30,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: ["expo-router"],
   extra: {
     wsUrl: process.env.EXPO_PUBLIC_WS_URL || "",
+    eas: {
+      projectId: "7d7d87e4-bbee-4cdd-b321-f4d3b6a6c19f",
+    },
   },
 });
