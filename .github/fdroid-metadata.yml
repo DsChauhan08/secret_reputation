@@ -1,0 +1,18 @@
+repo_url: https://github.com/DsChauhan08/secret_reputation
+app_name: Secret Reputation
+package_id: com.secretreputation.app
+license: MIT
+source_code: https://github.com/DsChauhan08/secret_reputation
+issue_tracker: https://github.com/DsChauhan08/secret_reputation/issues
+release_tag: v1.0.0
+
+android:
+  apk_asset_url: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.0.0/secret-reputation-v1.0.0.apk
+  apk_sha256: 6278257b529dfe702e7b4a222649266fe41c2700b16afc915e12778ddfae28fa
+  aab_asset_url: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.0.0/secret-reputation-v1.0.0.aab
+  aab_sha256: adfa2cf6be3dc3fb44b232b65afd2fc083d6214ae1607763afb4023dc946f659
+
+notes:
+  - For F-Droid main repo, provide reproducible build recipe in fdroiddata metadata.
+  - Prefer APK artifact for direct user install and IzzyOnDroid ingestion.
+  - iOS binary distribution is not applicable for F-Droid.

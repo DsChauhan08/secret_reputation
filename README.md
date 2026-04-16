@@ -86,11 +86,17 @@ gh release create v1.0.0 \
 - Host signed APK in GitHub Releases.
 - Ensure app is FOSS and source is public (already true).
 - Submit repository + latest release URL to IzzyOnDroid index maintainers.
+- Reuse template: `.github/ISSUE_TEMPLATE/izzyondroid-submission.md`
 
 #### F-Droid readiness checklist
 - Stable, reproducible tag-based builds.
 - No proprietary tracking SDKs.
 - Build metadata and recipe (`metadata/*.yml`) prepared in F-Droid data repo.
 - Keep release tags and changelogs consistent.
+- Repo metadata starter: `.github/fdroid-metadata.yml`
+
+### Current release assets (v1.0.0)
+- APK: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.0.0/secret-reputation-v1.0.0.apk
+- AAB: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.0.0/secret-reputation-v1.0.0.aab
 
 Note: iOS binaries are distributed through TestFlight/App Store Connect, not open-source Android stores.
