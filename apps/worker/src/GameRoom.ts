@@ -27,8 +27,7 @@ function pickTieWinner(candidates: VoteCount[], categoryId: string): VoteCount {
 
 const MAX_PLAYERS = 10;
 const MIN_PLAYERS = 3;
-const MIN_ROUNDS = 3;
-const MAX_ROUNDS = 12;
+const MIN_ROUNDS = 10;
 const MAX_CUSTOM_CATEGORIES = 24;
 
 const PLAYER_NAME_MAX = 20;
@@ -636,8 +635,7 @@ export class GameRoom implements DurableObject {
     const categoryIdSet = new Set(mergedCategories.map((category) => category.id));
 
     const selectedCategoryIds = dedupe(payload.selectedCategoryIds)
-      .filter((id) => categoryIdSet.has(id))
-      .slice(0, MAX_ROUNDS);
+      .filter((id) => categoryIdSet.has(id));
 
     if (chaosEnabled && selectedCategoryIds.length >= MIN_ROUNDS) {
       const chaosCandidates = mergedCategories.filter(

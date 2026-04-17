@@ -95,8 +95,61 @@ gh release create v1.0.0 \
 - Keep release tags and changelogs consistent.
 - Repo metadata starter: `.github/fdroid-metadata.yml`
 
+#### F-Droid submission (proper prep, excluding screenshots)
+This repository already includes F-Droid/fastlane starter metadata at:
+
+- `fastlane/metadata/android/en-US/title.txt`
+- `fastlane/metadata/android/en-US/short_description.txt`
+- `fastlane/metadata/android/en-US/full_description.txt`
+- `fastlane/metadata/android/en-US/changelogs/1.txt`
+- `fdroid/metadata/com.secretreputation.app.yml`
+
+Before opening your `fdroiddata` merge request, complete the following:
+
+1. **Cut optimized release tag** (recommended: `v1.0.1+`) and upload the optimized APK.
+2. **Extract signer fingerprint** from that APK and set `AllowedAPKSigningKeys` in
+   `fdroid/metadata/com.secretreputation.app.yml`:
+
+   ```bash
+   apksigner verify --print-certs secret-reputation-vX.Y.Z.apk
+   ```
+
+   Use the SHA-256 cert fingerprint as lowercase hex without colons.
+
+3. **Validate metadata + build recipe in fdroiddata**:
+   - Add `metadata/com.secretreputation.app.yml` in your `fdroiddata` fork.
+   - Run `fdroid readmeta`, `fdroid lint com.secretreputation.app`, and
+     `fdroid build com.secretreputation.app` in the official buildserver container.
+4. **Open MR to fdroiddata** (or open `fdroid/rfp` first if you prefer reviewer guidance).
+
+Screenshots can be added later under:
+`fastlane/metadata/android/en-US/images/phoneScreenshots/`
+
 ### Current release assets (v1.0.0)
 - APK: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.0.0/secret-reputation-v1.0.0.apk
 - AAB: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.0.0/secret-reputation-v1.0.0.aab
 
 Note: iOS binaries are distributed through TestFlight/App Store Connect, not open-source Android stores.
+
+## Automated gameplay tests (no multiple phones required)
+
+You can test full room flow (create, join, start, vote, reveal, leave/reconnect cases)
+using simulated WebSocket clients from one machine.
+
+From `apps/worker`:
+
+```bash
+bun run test:e2e
+```
+
+Optional target override (if not using the default deployed worker URL):
+
+```bash
+WS_URL="wss://your-worker.example.workers.dev" \
+HTTP_URL="https://your-worker.example.workers.dev" \
+bun run test:e2e
+```
+
+The E2E suite now includes leave-flow coverage for:
+- player leaving during an active voting round (votesRequired adjusts correctly)
+- host leaving and reconnecting with reconnect token (room/game state preserved)

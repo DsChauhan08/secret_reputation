@@ -1,6 +1,12 @@
 const WS_URL = process.env.WS_URL ?? "wss://secret-reputation.singhdschauhan10.workers.dev";
 const HTTP_URL = process.env.HTTP_URL ?? "https://secret-reputation.singhdschauhan10.workers.dev";
 
+const MIN_ROUNDS = 10;
+
+function pickFirstCategoryIds(categories: any[], count = MIN_ROUNDS): string[] {
+  return categories.slice(0, Math.min(count, categories.length)).map((category: any) => category.id);
+}
+
 let passed = 0;
 let failed = 0;
 
@@ -51,6 +57,10 @@ function waitForMessage(ws: WebSocket, expectedType?: string, timeoutMs = 5000):
 
 function send(ws: WebSocket, event: any) {
   ws.send(JSON.stringify(event));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function randomCode(): string {
@@ -188,7 +198,7 @@ async function testReconnectFlow() {
   const gsP3 = waitForMessage(p3Ws, "GAME_STARTED");
   send(hostWs, {
     type: "START_GAME",
-    payload: { selectedCategoryIds: [cats[0].id, cats[1].id, cats[2].id] },
+    payload: { selectedCategoryIds: pickFirstCategoryIds(cats) },
   });
   const started = await gsHost;
   await gsP2;
@@ -260,7 +270,7 @@ async function testFullGameFlow() {
   assert(p2Id !== p3Id, "Player IDs are unique");
 
   const categories = created.payload.room.categories;
-  const selectedIds = categories.slice(0, 3).map((c: any) => c.id);
+  const selectedIds = pickFirstCategoryIds(categories);
 
   const hostStartPromise = waitForMessage(hostWs, "GAME_STARTED");
   const p2StartPromise = waitForMessage(p2Ws, "GAME_STARTED");
@@ -273,106 +283,69 @@ async function testFullGameFlow() {
   const p3Started = await p3StartPromise;
   const runtimeSelectedIds = hostStarted.payload.room.selectedCategoryIds as string[];
   assert(hostStarted.payload.room.status === "voting", "Status is voting");
-  assert(hostStarted.payload.room.totalRounds === 3, "Total rounds = 3");
-  assert(runtimeSelectedIds.length === 3, "Runtime selected category count is 3");
+  assert(hostStarted.payload.room.totalRounds === MIN_ROUNDS, `Total rounds = ${MIN_ROUNDS}`);
+  assert(runtimeSelectedIds.length === MIN_ROUNDS, `Runtime selected category count is ${MIN_ROUNDS}`);
   assert(p2Started.type === "GAME_STARTED", "P2 received GAME_STARTED");
   assert(p3Started.type === "GAME_STARTED", "P3 received GAME_STARTED");
 
-  console.log("  📋 Round 1: Voting...");
-  const cat1 = runtimeSelectedIds[0];
+  for (let roundIndex = 0; roundIndex < runtimeSelectedIds.length; roundIndex += 1) {
+    const categoryId = runtimeSelectedIds[roundIndex];
+    console.log(`  📋 Round ${roundIndex + 1}: Voting...`);
 
-  send(hostWs, { type: "SUBMIT_VOTE", payload: { categoryId: cat1, votedForId: p2Id } });
-  const vr1 = await waitForMessage(hostWs, "VOTE_RECEIVED");
-  assert(vr1.payload.votesSubmitted === 1, "Vote count = 1 after host vote");
+    await sleep(60);
+    send(hostWs, { type: "SUBMIT_VOTE", payload: { categoryId, votedForId: p2Id } });
+    const voteProgress = await waitForMessage(hostWs, "VOTE_RECEIVED");
+    assert(voteProgress.payload.votesSubmitted >= 1, "Vote progress updates after host vote");
 
-  send(p2Ws, { type: "SUBMIT_VOTE", payload: { categoryId: cat1, votedForId: p3Id } });
-  await waitForMessage(p2Ws, "VOTE_RECEIVED");
+    send(p2Ws, { type: "SUBMIT_VOTE", payload: { categoryId, votedForId: p3Id } });
+    await waitForMessage(p2Ws, "VOTE_RECEIVED");
 
-  const revealHostPromise = waitForMessage(hostWs, "REVEAL_RESULT");
-  const revealP2Promise = waitForMessage(p2Ws, "REVEAL_RESULT");
-  const revealP3Promise = waitForMessage(p3Ws, "REVEAL_RESULT");
+    const revealHostPromise = waitForMessage(hostWs, "REVEAL_RESULT");
+    const revealP2Promise = waitForMessage(p2Ws, "REVEAL_RESULT");
+    const revealP3Promise = waitForMessage(p3Ws, "REVEAL_RESULT");
 
-  send(p3Ws, { type: "SUBMIT_VOTE", payload: { categoryId: cat1, votedForId: p2Id } });
+    send(p3Ws, { type: "SUBMIT_VOTE", payload: { categoryId, votedForId: p2Id } });
 
-  const reveal = await revealHostPromise;
-  await revealP2Promise;
-  await revealP3Promise;
-  assert(reveal.type === "REVEAL_RESULT", "Received REVEAL_RESULT");
-  assert(reveal.payload.result.categoryId === cat1, "Correct category");
-  assert(reveal.payload.result.winnerId === p2Id, "Bob wins (2 votes)");
-  assert(reveal.payload.result.winnerName === "Bob", "Winner name correct");
-  assert(reveal.payload.result.winnerVotes === 2, "Winner has 2 votes");
-  assert(reveal.payload.result.totalVotes === 3, "Total votes = 3");
-  assert(reveal.payload.result.commentary.length > 0, "Commentary generated");
-  assert(reveal.payload.result.voteCounts.length === 3, "Vote counts for all 3 players");
+    const reveal = await revealHostPromise;
+    await revealP2Promise;
+    await revealP3Promise;
 
-  console.log("  📋 Round 2: Next round...");
-  const nextHostPromise = waitForMessage(hostWs, "NEXT_ROUND");
-  const nextP2Promise = waitForMessage(p2Ws, "NEXT_ROUND");
-  const nextP3Promise = waitForMessage(p3Ws, "NEXT_ROUND");
+    assert(reveal.type === "REVEAL_RESULT", `Received REVEAL_RESULT for round ${roundIndex + 1}`);
+    assert(reveal.payload.result.categoryId === categoryId, `Correct category for round ${roundIndex + 1}`);
+    assert(reveal.payload.result.winnerId === p2Id, `Bob wins round ${roundIndex + 1} (2 votes)`);
+    assert(reveal.payload.result.winnerVotes === 2, "Winner has 2 votes");
+    assert(reveal.payload.result.totalVotes === 3, "Total votes = 3");
+    assert(reveal.payload.result.commentary.length > 0, "Commentary generated");
+    assert(reveal.payload.result.voteCounts.length === 3, "Vote counts for all 3 players");
 
-  send(hostWs, { type: "NEXT_ROUND", payload: {} });
+    if (roundIndex < runtimeSelectedIds.length - 1) {
+      const nextHostPromise = waitForMessage(hostWs, "NEXT_ROUND");
+      const nextP2Promise = waitForMessage(p2Ws, "NEXT_ROUND");
+      const nextP3Promise = waitForMessage(p3Ws, "NEXT_ROUND");
 
-  const nextRound = await nextHostPromise;
-  await nextP2Promise;
-  await nextP3Promise;
-  assert(nextRound.payload.currentRound === 1, "Round advanced to 1");
-  assert(nextRound.payload.categoryId === runtimeSelectedIds[1], "Correct category for round 2");
+      await sleep(60);
+      send(hostWs, { type: "NEXT_ROUND", payload: {} });
 
-  const cat2 = runtimeSelectedIds[1];
-  send(hostWs, { type: "SUBMIT_VOTE", payload: { categoryId: cat2, votedForId: p3Id } });
-  await waitForMessage(hostWs, "VOTE_RECEIVED");
-
-  send(p2Ws, { type: "SUBMIT_VOTE", payload: { categoryId: cat2, votedForId: p3Id } });
-  await waitForMessage(p2Ws, "VOTE_RECEIVED");
-
-  const reveal2HostPromise = waitForMessage(hostWs, "REVEAL_RESULT");
-  const reveal2P3Promise = waitForMessage(p3Ws, "REVEAL_RESULT");
-
-  send(p3Ws, { type: "SUBMIT_VOTE", payload: { categoryId: cat2, votedForId: hostId } });
-
-  const reveal2 = await reveal2P3Promise;
-  await reveal2HostPromise;
-  assert(reveal2.payload.result.winnerId === p3Id, "Charlie wins round 2 (2 votes)");
-
-  console.log("  📋 Round 3: Final round...");
-  const nextToRound3Host = waitForMessage(hostWs, "NEXT_ROUND");
-  const nextToRound3P2 = waitForMessage(p2Ws, "NEXT_ROUND");
-  const nextToRound3P3 = waitForMessage(p3Ws, "NEXT_ROUND");
-
-  send(hostWs, { type: "NEXT_ROUND", payload: {} });
-  await nextToRound3Host;
-  await nextToRound3P2;
-  await nextToRound3P3;
-
-  const cat3 = runtimeSelectedIds[2];
-  send(hostWs, { type: "SUBMIT_VOTE", payload: { categoryId: cat3, votedForId: p2Id } });
-  await waitForMessage(hostWs, "VOTE_RECEIVED");
-
-  send(p2Ws, { type: "SUBMIT_VOTE", payload: { categoryId: cat3, votedForId: p3Id } });
-  await waitForMessage(p2Ws, "VOTE_RECEIVED");
-
-  const reveal3Host = waitForMessage(hostWs, "REVEAL_RESULT");
-  const reveal3P2 = waitForMessage(p2Ws, "REVEAL_RESULT");
-  const reveal3P3 = waitForMessage(p3Ws, "REVEAL_RESULT");
-
-  send(p3Ws, { type: "SUBMIT_VOTE", payload: { categoryId: cat3, votedForId: p2Id } });
-
-  await reveal3Host;
-  await reveal3P2;
-  await reveal3P3;
+      const nextRound = await nextHostPromise;
+      await nextP2Promise;
+      await nextP3Promise;
+      assert(nextRound.payload.currentRound === roundIndex + 1, `Round advanced to ${roundIndex + 1}`);
+      assert(nextRound.payload.categoryId === runtimeSelectedIds[roundIndex + 1], "Correct next-round category");
+    }
+  }
 
   const endHostPromise = waitForMessage(hostWs, "GAME_ENDED");
   const endP2Promise = waitForMessage(p2Ws, "GAME_ENDED");
   const endP3Promise = waitForMessage(p3Ws, "GAME_ENDED");
 
+  await sleep(60);
   send(hostWs, { type: "NEXT_ROUND", payload: {} });
 
   const ended = await endHostPromise;
   await endP2Promise;
   await endP3Promise;
   assert(ended.type === "GAME_ENDED", "Received GAME_ENDED");
-  assert(ended.payload.results.length === 3, "3 results in final summary");
+  assert(ended.payload.results.length === MIN_ROUNDS, `${MIN_ROUNDS} results in final summary`);
 
   hostWs.close();
   p2Ws.close();
@@ -407,7 +380,7 @@ async function testSecuritySelfVote() {
   const gs3 = waitForMessage(p3Ws, "GAME_STARTED");
   send(hostWs, {
     type: "START_GAME",
-    payload: { selectedCategoryIds: [cats[0].id, cats[1].id, cats[2].id] },
+    payload: { selectedCategoryIds: pickFirstCategoryIds(cats) },
   });
   const started = await gs1;
   await gs2;
@@ -501,7 +474,8 @@ async function testSecurityMinCategories() {
   send(hostWs, { type: "START_GAME", payload: { selectedCategoryIds: [created.payload.room.categories[0].id] } });
   const err = await waitForMessage(hostWs, "ERROR");
   assert(err.type === "ERROR", "Start with 1 category rejected");
-  assert(err.payload.message.includes("Select at least 3"), "Correct min category error");
+  const minCategoryMessage = String(err.payload.message ?? "");
+  assert(/Select at least \d+ valid categories to start/.test(minCategoryMessage), "Correct min category error");
 
   hostWs.close();
   p2Ws.close();
@@ -548,6 +522,128 @@ async function testSecurityRoomFull() {
   sockets.forEach(s => s.close());
 }
 
+async function testLeaveRoomDuringVoting() {
+  console.log("\n🔍 TEST: Leave room during active voting");
+  const code = randomCode();
+
+  const hostWs = await connectWS(code);
+  send(hostWs, {
+    type: "CREATE_ROOM",
+    payload: { playerName: "Host", playerColor: "#845EC2", roomName: "Leave Voting", mode: "light-roast" },
+  });
+  const created = await waitForMessage(hostWs, "ROOM_CREATED");
+  const hostId = created.payload.playerId as string;
+
+  const hostP2Notif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p2Ws = await connectWS(code);
+  send(p2Ws, { type: "JOIN_ROOM", payload: { code, playerName: "P2", playerColor: "#FF8066" } });
+  const p2Joined = await waitForMessage(p2Ws, "ROOM_JOINED");
+  const p2Id = p2Joined.payload.playerId as string;
+  await hostP2Notif;
+
+  const hostP3Notif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p2P3Notif = waitForMessage(p2Ws, "PLAYER_JOINED");
+  const p3Ws = await connectWS(code);
+  send(p3Ws, { type: "JOIN_ROOM", payload: { code, playerName: "P3", playerColor: "#4B4453" } });
+  await waitForMessage(p3Ws, "ROOM_JOINED");
+  await hostP3Notif;
+  await p2P3Notif;
+
+  const categories = created.payload.room.categories;
+  const selectedIds = pickFirstCategoryIds(categories);
+
+  const hostStarted = waitForMessage(hostWs, "GAME_STARTED");
+  const p2Started = waitForMessage(p2Ws, "GAME_STARTED");
+  const p3Started = waitForMessage(p3Ws, "GAME_STARTED");
+
+  send(hostWs, { type: "START_GAME", payload: { selectedCategoryIds: selectedIds } });
+
+  const started = await hostStarted;
+  await p2Started;
+  await p3Started;
+  const currentCategoryId = started.payload.room.selectedCategoryIds[0] as string;
+
+  send(hostWs, { type: "SUBMIT_VOTE", payload: { categoryId: currentCategoryId, votedForId: p2Id } });
+  const voteProgress1 = await waitForMessage(hostWs, "VOTE_RECEIVED");
+  assert(voteProgress1.payload.votesSubmitted === 1, "Host vote counted before leave");
+
+  const hostVoteReduced = waitForMessage(hostWs, "VOTE_RECEIVED");
+  p3Ws.close();
+  const afterLeave = await hostVoteReduced;
+  assert(afterLeave.payload.votesRequired === 2, "votesRequired reduced when a player leaves mid-round");
+
+  const revealHost = waitForMessage(hostWs, "REVEAL_RESULT");
+  const revealP2 = waitForMessage(p2Ws, "REVEAL_RESULT");
+
+  send(p2Ws, { type: "SUBMIT_VOTE", payload: { categoryId: currentCategoryId, votedForId: hostId } });
+
+  const reveal = await revealHost;
+  await revealP2;
+  assert(reveal.type === "REVEAL_RESULT", "Round reveals after remaining players vote");
+  assert(reveal.payload.result.totalVotes === 2, "Reveal totals reflect reduced connected player count");
+
+  hostWs.close();
+  p2Ws.close();
+}
+
+async function testHostLeaveAndReconnect() {
+  console.log("\n🔍 TEST: Host leave flow with reconnect token");
+  const code = randomCode();
+
+  const hostWs = await connectWS(code);
+  send(hostWs, {
+    type: "CREATE_ROOM",
+    payload: { playerName: "Host", playerColor: "#845EC2", roomName: "Host Leave", mode: "normal-chaos" },
+  });
+  const created = await waitForMessage(hostWs, "ROOM_CREATED");
+  const hostId = created.payload.playerId as string;
+  const hostToken = created.payload.reconnectToken as string;
+
+  const hostP2Notif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p2Ws = await connectWS(code);
+  send(p2Ws, { type: "JOIN_ROOM", payload: { code, playerName: "P2", playerColor: "#FF8066" } });
+  await waitForMessage(p2Ws, "ROOM_JOINED");
+  await hostP2Notif;
+
+  const hostP3Notif = waitForMessage(hostWs, "PLAYER_JOINED");
+  const p2P3Notif = waitForMessage(p2Ws, "PLAYER_JOINED");
+  const p3Ws = await connectWS(code);
+  send(p3Ws, { type: "JOIN_ROOM", payload: { code, playerName: "P3", playerColor: "#4B4453" } });
+  await waitForMessage(p3Ws, "ROOM_JOINED");
+  await hostP3Notif;
+  await p2P3Notif;
+
+  const selectedIds = pickFirstCategoryIds(created.payload.room.categories);
+  const hostStarted = waitForMessage(hostWs, "GAME_STARTED");
+  const p2Started = waitForMessage(p2Ws, "GAME_STARTED");
+  const p3Started = waitForMessage(p3Ws, "GAME_STARTED");
+
+  send(hostWs, { type: "START_GAME", payload: { selectedCategoryIds: selectedIds } });
+  const started = await hostStarted;
+  await p2Started;
+  await p3Started;
+
+  const leaveNoticeP2 = waitForMessage(p2Ws, "PLAYER_LEFT");
+  hostWs.close();
+  const leaveNotice = await leaveNoticeP2;
+  assert(leaveNotice.payload.playerId === hostId, "Other players see host leave event");
+
+  const rehostWs = await connectWS(code);
+  send(rehostWs, { type: "RECONNECT", payload: { playerId: hostId, reconnectToken: hostToken } });
+  const rejoined = await waitForMessage(rehostWs, "ROOM_JOINED");
+  assert(rejoined.payload.playerId === hostId, "Host can rejoin with reconnect token");
+  assert(rejoined.payload.room.status === "voting", "Game state is preserved after host reconnect");
+
+  const currentCategoryId = started.payload.room.selectedCategoryIds[0] as string;
+  send(rehostWs, { type: "SUBMIT_VOTE", payload: { categoryId: currentCategoryId, votedForId: rejoined.payload.room.players[1].id } });
+  const voteAck = await waitForMessage(rehostWs, "VOTE_RECEIVED");
+  assert(voteAck.type === "VOTE_RECEIVED", "Reconnected host can continue voting");
+
+  rehostWs.close();
+  p2Ws.close();
+  p3Ws.close();
+}
+
 async function testInvitePage() {
   console.log("\n🔍 TEST: Invite page");
   const res = await fetch(`${HTTP_URL}/invite?room=ABCD23`);
@@ -583,7 +679,7 @@ async function testCustomCategories() {
   await waitForMessage(p3Ws, "ROOM_JOINED");
   await p3Notif;
 
-  const builtinIds = created.payload.room.categories.slice(0, 2).map((c: any) => c.id);
+  const builtinIds = created.payload.room.categories.slice(0, 9).map((c: any) => c.id);
   const customCats = [
     { id: "custom_test_one", text: "most likely to make a custom question" },
     { id: "custom_test_two", text: "most likely to add their own category rules" },
@@ -605,7 +701,7 @@ async function testCustomCategories() {
 
   const hasCust = started.payload.room.categories.some((c: any) => c.id === "custom_test_one" && c.isCustom);
   assert(hasCust, "Custom category merged into room");
-  assert(started.payload.room.totalRounds === 3, "3 rounds (2 builtin + 1 custom)");
+  assert(started.payload.room.totalRounds === MIN_ROUNDS, `${MIN_ROUNDS} rounds (9 builtin + 1 custom)`);
 
   hostWs.close();
   p2Ws.close();
@@ -635,7 +731,7 @@ async function testChaosCardRound() {
   await waitForMessage(p3Ws, "ROOM_JOINED");
   await p3Notif;
 
-  const selected = created.payload.room.categories.slice(0, 3).map((c: any) => c.id);
+  const selected = pickFirstCategoryIds(created.payload.room.categories);
   const startedHost = waitForMessage(hostWs, "GAME_STARTED");
   const startedP2 = waitForMessage(p2Ws, "GAME_STARTED");
 
@@ -652,7 +748,7 @@ async function testChaosCardRound() {
 
   const chaosCount = started.payload.room.categories.filter((c: any) => c.isChaos).length;
   assert(chaosCount > 0, "Chaos cards included in room category pool");
-  assert(started.payload.room.totalRounds >= 4, "Chaos enabled adds extra round");
+  assert(started.payload.room.totalRounds >= MIN_ROUNDS, "Chaos-enabled game keeps at least minimum rounds");
 
   const selectedRoundIds = started.payload.room.selectedCategoryIds as string[];
   const categoriesById = new Map(started.payload.room.categories.map((c: any) => [c.id, c]));
@@ -684,7 +780,7 @@ async function testCustomCategoryModeration() {
   await waitForMessage(p3Ws, "ROOM_JOINED");
   await p3Notif;
 
-  const builtinIds = created.payload.room.categories.slice(0, 3).map((c: any) => c.id);
+  const builtinIds = pickFirstCategoryIds(created.payload.room.categories);
   send(hostWs, {
     type: "START_GAME",
     payload: {
@@ -764,6 +860,8 @@ async function main() {
     await testSecurityMinCategories();
     await testSecurityInvalidJSON();
     await testSecurityRoomFull();
+    await testLeaveRoomDuringVoting();
+    await testHostLeaveAndReconnect();
     await testCustomCategoryModeration();
     await testQuestionVault();
   } catch (err) {

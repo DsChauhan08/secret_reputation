@@ -1,0 +1,7 @@
+Initial public release.
+
+- Anonymous multiplayer room voting
+- Chaos cards + tie-break transparency
+- Haptics and reveal pacing improvements
+- Shared custom question vault (opt-in)
+- Cloudflare Durable Object backend hardening

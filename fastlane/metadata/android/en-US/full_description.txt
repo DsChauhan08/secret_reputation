@@ -1,0 +1,21 @@
+Secret Reputation is an anonymous multiplayer party game for friend groups.
+
+Create or join a room, pick your name and color, and vote privately on
+"most likely to..." categories. Nobody sees who voted for whom.
+
+Gameplay features:
+- Anonymous voting with room code join flow
+- Multiple game vibes: Light Roast, Normal Chaos, Unhinged
+- Reveal rounds with winner, vote totals, and commentary
+- Tie-break transparency when top votes are equal
+- Optional chaos card rounds for extra unpredictability
+- Shareable round summary and rematch invitation flow
+
+Safety and reliability:
+- Input moderation for custom questions
+- Host-only game controls for start/next/play-again
+- Reconnect handling for dropped connections
+- Durable backend room state for improved session reliability
+
+You can also add your own custom questions and optionally contribute them
+anonymously to a shared community pool for future rooms.

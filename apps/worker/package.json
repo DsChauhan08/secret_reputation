@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "test:e2e": "bun run src/e2e-test.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260412.1",
