@@ -21,8 +21,7 @@ import {
   type RoomMode,
 } from "@secret-reputation/shared";
 
-const MIN_CATEGORIES = 3;
-const MAX_CATEGORIES = 12;
+const MIN_CATEGORIES = 10;
 
 export default function CategoriesScreen() {
   const router = useRouter();
@@ -76,14 +75,14 @@ export default function CategoriesScreen() {
   }, [availableCategories, customCategories]);
 
   const selectedCount = selected.size;
-  const canStart = selectedCount >= MIN_CATEGORIES && selectedCount <= MAX_CATEGORIES;
+  const maxSelectable = allCategories.length;
+  const canStart = selectedCount >= MIN_CATEGORIES;
 
   const toggleCategory = (id: string) => {
     const next = new Set(selected);
     if (next.has(id)) {
       next.delete(id);
     } else {
-      if (next.size >= MAX_CATEGORIES) return;
       next.add(id);
     }
     setSelected(next);
@@ -93,13 +92,13 @@ export default function CategoriesScreen() {
     if (!room) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     const allBuiltInForMode = getCategoriesByMode(room.mode as RoomMode);
-    const builtInCount = Math.min(8, allBuiltInForMode.length);
+    const builtInCount = Math.min(10, allBuiltInForMode.length);
     const builtIn = getRandomCategories(room.mode as RoomMode, builtInCount).map((category) => category.id);
     const custom = [...storedCustom]
       .sort(() => Math.random() - 0.5)
-      .slice(0, Math.max(0, 8 - builtIn.length))
+      .slice(0, Math.max(0, 10 - builtIn.length))
       .map((question) => question.id);
-    setSelected(new Set([...builtIn, ...custom].slice(0, 8)));
+    setSelected(new Set([...builtIn, ...custom].slice(0, 10)));
   };
 
   const handleAddCustom = async () => {
@@ -156,11 +155,11 @@ export default function CategoriesScreen() {
         </Pressable>
 
         <Text style={[typography.h1, { marginTop: spacing.lg }]}>Categories</Text>
-        <Text style={[typography.caption, { marginTop: spacing.sm }]}>pick {MIN_CATEGORIES}-{MAX_CATEGORIES} for this round</Text>
+        <Text style={[typography.caption, { marginTop: spacing.sm }]}>pick at least {MIN_CATEGORIES} for this game</Text>
 
         <View style={styles.controls}>
           <Text style={[typography.bodyBold, { color: canStart ? colors.primary : colors.textMuted, flex: 1 }]}> 
-            {selectedCount}/{MAX_CATEGORIES}
+            {selectedCount}/{maxSelectable}
           </Text>
           <Pressable onPress={handleShuffle} style={styles.controlBtn}>
             <Text style={[typography.caption, { color: colors.primary }]}>Shuffle</Text>

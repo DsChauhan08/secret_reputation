@@ -16,6 +16,16 @@ export default function EndScreen() {
 
   const isHost = room?.hostId === playerId;
 
+  const shouldShowRematchInvite = useMemo(() => {
+    if (!room || room.results.length < 3) return false;
+    const seed = `${room.code}:${room.results.length}:${room.players.length}`;
+    let hash = 0;
+    for (let i = 0; i < seed.length; i += 1) {
+      hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+    }
+    return hash % 100 >= 45;
+  }, [room?.code, room?.results.length, room?.players.length]);
+
   useEffect(() => {
     if (room?.status === "lobby") router.replace("/room/lobby");
   }, [room?.status, router]);
@@ -29,19 +39,9 @@ export default function EndScreen() {
 
   const handleLeave = () => {
     wsClient.disconnect();
+    router.push("/");
     reset();
-    router.replace("/");
   };
-
-  const shouldShowRematchInvite = useMemo(() => {
-    if (room.results.length < 3) return false;
-    const seed = `${room.code}:${room.results.length}:${room.players.length}`;
-    let hash = 0;
-    for (let i = 0; i < seed.length; i += 1) {
-      hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-    }
-    return hash % 100 >= 45;
-  }, [room.code, room.results.length, room.players.length]);
   const handleInviteRematch = async () => {
     try {
       await Share.share({

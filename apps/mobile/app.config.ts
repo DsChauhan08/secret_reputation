@@ -9,7 +9,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: "./assets/icon.png",
   userInterfaceStyle: "light",
   scheme: "secretrep",
-  newArchEnabled: false,
   splash: {
     image: "./assets/splash-icon.png",
     resizeMode: "contain",
@@ -26,6 +25,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     edgeToEdgeEnabled: true,
     package: "com.secretreputation.app",
+    versionCode: 1,
   },
   plugins: [
     "expo-router",
