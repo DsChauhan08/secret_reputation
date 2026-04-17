@@ -9,7 +9,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: "./assets/icon.png",
   userInterfaceStyle: "light",
   scheme: "secretrep",
-  newArchEnabled: true,
+  newArchEnabled: false,
   splash: {
     image: "./assets/splash-icon.png",
     resizeMode: "contain",
@@ -27,7 +27,19 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     edgeToEdgeEnabled: true,
     package: "com.secretreputation.app",
   },
-  plugins: ["expo-router"],
+  plugins: [
+    "expo-router",
+    [
+      "expo-build-properties",
+      {
+        android: {
+          enableProguardInReleaseBuilds: true,
+          enableShrinkResourcesInReleaseBuilds: true,
+          buildArchs: ["arm64-v8a"],
+        },
+      },
+    ],
+  ],
   extra: {
     wsUrl: process.env.EXPO_PUBLIC_WS_URL || "",
     eas: {
