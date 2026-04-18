@@ -95,6 +95,34 @@ gh release create v1.0.0 \
 - Keep release tags and changelogs consistent.
 - Repo metadata starter: `.github/fdroid-metadata.yml`
 
+### Local prerequisites (for F-Droid validation)
+
+Install `fdroidserver` and Android SDK build tools on your machine:
+
+```bash
+python3 -m pip install --user fdroidserver
+
+mkdir -p "$HOME/Android/Sdk/cmdline-tools/latest"
+curl -L "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip" \
+  -o "$HOME/Android/Sdk/commandlinetools-linux.zip"
+unzip -q "$HOME/Android/Sdk/commandlinetools-linux.zip" -d "$HOME/Android/Sdk/cmdline-tools/latest"
+mv "$HOME/Android/Sdk/cmdline-tools/latest/cmdline-tools"/* "$HOME/Android/Sdk/cmdline-tools/latest/"
+rmdir "$HOME/Android/Sdk/cmdline-tools/latest/cmdline-tools"
+
+export ANDROID_SDK_ROOT="$HOME/Android/Sdk"
+export ANDROID_HOME="$HOME/Android/Sdk"
+export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/build-tools/35.0.0:$PATH"
+
+yes | sdkmanager --licenses
+sdkmanager "platform-tools" "build-tools;35.0.0" "platforms;android-35"
+```
+
+Verify APK signer fingerprint (used for `AllowedAPKSigningKeys`):
+
+```bash
+apksigner verify --print-certs release-assets/secret-reputation-v1.0.0.apk
+```
+
 #### F-Droid submission (proper prep, excluding screenshots)
 This repository already includes F-Droid/fastlane starter metadata at:
 
@@ -118,6 +146,8 @@ Before opening your `fdroiddata` merge request, complete the following:
 
 3. **Validate metadata + build recipe in fdroiddata**:
    - Add `metadata/com.secretreputation.app.yml` in your `fdroiddata` fork.
+   - If your local `fdroid lint` complains about unknown categories, add local config at
+     `fdroid/config/categories.yml` (already included in this repo for local linting).
    - Run `fdroid readmeta`, `fdroid lint com.secretreputation.app`, and
      `fdroid build com.secretreputation.app` in the official buildserver container.
 4. **Open MR to fdroiddata** (or open `fdroid/rfp` first if you prefer reviewer guidance).

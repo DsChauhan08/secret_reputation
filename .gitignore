@@ -9,6 +9,10 @@ dist/
 *.ipa
 .DS_Store
 .chroma-data/
+fdroid/build/
+fdroid/repo/
+fdroid/tmp/
+fdroid/logs/
 
 # Secrets — never commit
 .env

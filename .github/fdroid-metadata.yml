@@ -13,6 +13,7 @@ android:
   aab_sha256: adfa2cf6be3dc3fb44b232b65afd2fc083d6214ae1607763afb4023dc946f659
 
 notes:
+  - APK signing key SHA-256: 9adce97e3492470d30850d491349f35191a4b3ce9e0b596aeca6e6b1090f8257
   - For F-Droid main repo, provide reproducible build recipe in fdroiddata metadata.
   - Prefer APK artifact for direct user install and IzzyOnDroid ingestion.
   - iOS binary distribution is not applicable for F-Droid.
