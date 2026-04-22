@@ -7,6 +7,7 @@ import { useGameStore } from "../../src/store";
 import { wsClient } from "../../src/ws";
 import type { RoundResult } from "../../src/store";
 import { buildShareMessage } from "../../src/inviteLinks";
+import { resetAnalyticsUser, trackError, trackEvent } from "../../src/analytics";
 
 export default function EndScreen() {
   const router = useRouter();
@@ -35,12 +36,21 @@ export default function EndScreen() {
   const handlePlayAgain = () => {
     if (!isHost) return;
     wsClient.send({ type: "PLAY_AGAIN", payload: {} as Record<string, never> });
+    trackEvent("play_again_requested", {
+      rounds_played: room.results.length,
+      player_count: room.players.length,
+    });
   };
 
   const handleLeave = () => {
+    trackEvent("room_left", {
+      rounds_played: room.results.length,
+      room_code: room.code,
+    });
     wsClient.disconnect();
     router.push("/");
     reset();
+    resetAnalyticsUser();
   };
   const handleInviteRematch = async () => {
     try {
@@ -48,8 +58,13 @@ export default function EndScreen() {
         title: "Rematch?",
         message: `${buildShareMessage(room.code)}\n\nRematch in 10 seconds? 👀`,
       });
+      trackEvent("rematch_invite_shared", {
+        room_code: room.code,
+      });
     } catch {
-      // ignored
+      trackError(new Error("rematch_invite_share_failed"), {
+        room_code: room.code,
+      });
     }
   };
 

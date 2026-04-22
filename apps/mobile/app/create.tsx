@@ -6,6 +6,7 @@ import { colors, typography, spacing } from "../src/theme";
 import { useGameStore } from "../src/store";
 import { wsClient } from "../src/ws";
 import type { RoomMode } from "../src/store";
+import { trackError, trackEvent } from "../src/analytics";
 
 const MODES: { key: RoomMode; title: string; desc: string; color: string }[] = [
   { key: "light-roast", title: "Light Roast", desc: "funny and harmless", color: "#845EC2" },
@@ -52,8 +53,16 @@ export default function CreateRoomScreen() {
           mode,
         },
       });
+
+      trackEvent("room_create_requested", {
+        room_mode: mode,
+        has_custom_room_name: roomName.trim().length > 0,
+      });
     } catch {
       setLoading(false);
+      trackError(new Error("create_room_connection_failed"), {
+        room_mode: mode,
+      });
       Alert.alert("Connection Failed", "Could not reach the server. Make sure the backend is running.");
     }
   };

@@ -5,6 +5,7 @@ import { Screen, SoftButton, Input, ColorPicker } from "../src/components";
 import { colors, typography, spacing } from "../src/theme";
 import { useGameStore } from "../src/store";
 import { wsClient } from "../src/ws";
+import { trackError, trackEvent } from "../src/analytics";
 
 export default function JoinRoomScreen() {
   const router = useRouter();
@@ -46,8 +47,15 @@ export default function JoinRoomScreen() {
           playerColor: selectedColor,
         },
       });
+
+      trackEvent("room_join_requested", {
+        room_code_length: code.trim().length,
+      });
     } catch {
       setLoading(false);
+      trackError(new Error("join_room_connection_failed"), {
+        room_code_length: code.trim().length,
+      });
       Alert.alert("Connection Failed", "Could not join the room. Check the code and try again.");
     }
   };

@@ -5,6 +5,7 @@ import { Screen, SoftButton, PlayerChip, Card } from "../../src/components";
 import { colors, typography, spacing } from "../../src/theme";
 import { useGameStore } from "../../src/store";
 import { buildShareMessage } from "../../src/inviteLinks";
+import { trackError, trackEvent } from "../../src/analytics";
 
 export default function LobbyScreen() {
   const router = useRouter();
@@ -25,11 +26,23 @@ export default function LobbyScreen() {
         message: buildShareMessage(room.code),
         title: "Join my Secret Reputation room",
       });
-    } catch {}
+      trackEvent("room_invite_shared", {
+        room_code: room.code,
+        source_screen: "lobby",
+      });
+    } catch {
+      trackError(new Error("room_invite_share_failed"), {
+        source_screen: "lobby",
+      });
+    }
   };
 
   const handleStart = () => {
     if (!isHost) return;
+    trackEvent("room_categories_opened", {
+      room_code: room.code,
+      player_count: room.players.length,
+    });
     router.push("/room/categories");
   };
 

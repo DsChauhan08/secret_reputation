@@ -6,6 +6,7 @@ import { Screen, SoftButton } from "../../src/components";
 import { colors, typography, spacing, radii, shadow } from "../../src/theme";
 import { useGameStore } from "../../src/store";
 import { wsClient } from "../../src/ws";
+import { trackEvent } from "../../src/analytics";
 
 type RevealPhase = "category" | "countdown" | "winner" | "commentary" | "stats" | "next";
 
@@ -96,6 +97,10 @@ export default function RevealScreen() {
   const handleContinue = () => {
     if (isHost) {
       wsClient.send({ type: "NEXT_ROUND", payload: {} as Record<string, never> });
+      trackEvent("round_advanced", {
+        next_round_index: room.currentRound + 1,
+        total_rounds: room.totalRounds,
+      });
     }
   };
 

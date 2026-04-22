@@ -20,6 +20,7 @@ import {
   type Category,
   type RoomMode,
 } from "@secret-reputation/shared";
+import { trackError, trackEvent } from "../../src/analytics";
 
 const MIN_CATEGORIES = 10;
 
@@ -104,6 +105,9 @@ export default function CategoriesScreen() {
   const handleAddCustom = async () => {
     const result = await addStoredCustomQuestion(customText);
     if (!result.ok) {
+      trackError(new Error("custom_question_validation_failed"), {
+        reason: result.reason,
+      });
       setCustomError(result.reason);
       return;
     }
@@ -138,6 +142,13 @@ export default function CategoriesScreen() {
         customCategories: selectedCustomCategories,
         enableChaos: chaosMode,
       },
+    });
+
+    trackEvent("game_start_requested", {
+      selected_count: selectedIds.length,
+      custom_selected_count: selectedCustomCategories.length,
+      chaos_enabled: chaosMode,
+      mode: room.mode,
     });
   };
 

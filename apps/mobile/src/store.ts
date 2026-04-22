@@ -8,6 +8,7 @@ import type {
   RoundResult,
   ServerEvent,
 } from "@secret-reputation/shared";
+import { identifyUser, trackEvent } from "./analytics";
 
 export type { Room, Player, RoundResult, GameStatus, RoomMode, ServerEvent };
 
@@ -142,6 +143,14 @@ export function handleServerEvent(event: ServerEvent): void {
         event.payload.reconnectToken,
       );
       store.setRoom(event.payload.room);
+      identifyUser(event.payload.playerId, {
+        player_name: store.playerName,
+        player_color: store.playerColor,
+      });
+      trackEvent("room_created", {
+        room_code: event.payload.room.code,
+        mode: event.payload.room.mode,
+      });
       break;
     case "ROOM_JOINED":
       store.setIdentity(
@@ -151,6 +160,14 @@ export function handleServerEvent(event: ServerEvent): void {
         event.payload.reconnectToken,
       );
       store.setRoom(event.payload.room);
+      identifyUser(event.payload.playerId, {
+        player_name: store.playerName,
+        player_color: store.playerColor,
+      });
+      trackEvent("room_joined", {
+        room_code: event.payload.room.code,
+        mode: event.payload.room.mode,
+      });
       break;
     case "PLAYER_JOINED":
       store.addPlayer(event.payload.player);
@@ -175,6 +192,10 @@ export function handleServerEvent(event: ServerEvent): void {
     case "GAME_ENDED":
       if (store.room) {
         store.setRoom({ ...store.room, results: event.payload.results, status: "ended" });
+        trackEvent("game_ended", {
+          room_code: store.room.code,
+          rounds_played: event.payload.results.length,
+        });
       }
       break;
     case "ROOM_STATE":

@@ -27,7 +27,7 @@ const navigationIntegration = Sentry.reactNavigationIntegration({
 if (sentryEnabled) {
   Sentry.init({
     dsn: sentryDsn,
-    enabled: !__DEV__,
+    enabled: true,
     tracesSampleRate: __DEV__ ? 1.0 : 0.2,
     environment: appEnvironment,
     release: `secret-reputation-mobile@${appVersion}`,
@@ -74,13 +74,25 @@ export function trackEvent(event: string, properties?: Record<string, unknown>):
 }
 
 export function identifyUser(id: string, properties?: Record<string, unknown>): void {
-  if (!posthogClient || !id) return;
-  posthogClient.identify(id, properties);
+  if (!id) return;
+
+  if (posthogClient) {
+    posthogClient.identify(id, properties);
+  }
+
+  if (sentryEnabled) {
+    Sentry.setUser({ id });
+  }
 }
 
 export function resetAnalyticsUser(): void {
-  if (!posthogClient) return;
-  posthogClient.reset();
+  if (posthogClient) {
+    posthogClient.reset();
+  }
+
+  if (sentryEnabled) {
+    Sentry.setUser(null);
+  }
 }
 
 export function trackError(error: unknown, context?: Record<string, unknown>): void {

@@ -3,6 +3,7 @@ import { ExpoConfig, ConfigContext } from "expo/config";
 export default ({ config }: ConfigContext): ExpoConfig => {
   const plugins: NonNullable<ExpoConfig["plugins"]> = [
     "expo-router",
+    "expo-localization",
     [
       "expo-build-properties",
       {
@@ -17,15 +18,19 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
   const sentryOrg = process.env.SENTRY_ORG;
   const sentryProject = process.env.SENTRY_PROJECT;
+  const sentryUrl = process.env.SENTRY_URL || "https://sentry.io/";
+
   if (sentryOrg && sentryProject) {
     plugins.push([
       "@sentry/react-native/expo",
       {
         organization: sentryOrg,
         project: sentryProject,
-        url: process.env.SENTRY_URL || "https://sentry.io/",
+        url: sentryUrl,
       },
     ]);
+  } else {
+    plugins.push("@sentry/react-native/expo");
   }
 
   return {

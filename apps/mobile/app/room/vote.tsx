@@ -6,6 +6,7 @@ import { Screen, SoftButton, PlayerChip, ProgressRing, Card } from "../../src/co
 import { colors, typography, spacing } from "../../src/theme";
 import { useGameStore } from "../../src/store";
 import { wsClient } from "../../src/ws";
+import { trackEvent } from "../../src/analytics";
 
 export default function VoteScreen() {
   const router = useRouter();
@@ -33,6 +34,12 @@ export default function VoteScreen() {
     if (!votedFor || locked || !currentCategory) return;
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     wsClient.send({ type: "SUBMIT_VOTE", payload: { categoryId: currentCategory.id, votedForId: votedFor } });
+    trackEvent("vote_submitted", {
+      category_id: currentCategory.id,
+      round_index: room.currentRound,
+      total_rounds: room.totalRounds,
+      votes_required: room.votesRequired,
+    });
     setLocked(true);
   };
 
