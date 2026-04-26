@@ -42,6 +42,30 @@ Because everyone has a secret reputation among their friends, and this game is t
 
 ## Release Guide (Android APK/AAB + iOS + OSS Store)
 
+### CI automation (recommended)
+
+This repo includes GitHub Actions workflow `mobile-release.yml` that starts EAS builds for mobile releases and syncs runtime/build env vars to EAS before building.
+
+Set these **GitHub repository secrets**:
+
+- `EAS_TOKEN` (required, from Expo account)
+- `EXPO_PUBLIC_POSTHOG_KEY`
+- `EXPO_PUBLIC_POSTHOG_HOST` (usually `https://us.i.posthog.com`)
+- `EXPO_PUBLIC_SENTRY_DSN`
+- `SENTRY_ORG`
+- `SENTRY_PROJECT`
+- `SENTRY_AUTH_TOKEN`
+- `SENTRY_URL` (optional, default is `https://sentry.io/`)
+
+How it runs:
+
+- Publishing a GitHub Release triggers a production build (`profile=production`, `platform=all`).
+- You can also run it manually via **Actions -> Mobile Release Build** and choose `preview` or `production` and platform.
+- The workflow writes those values into EAS env for the matching EAS environment and then starts `eas build --non-interactive`.
+- Build metadata is saved as an artifact and URLs are shown in the job summary.
+
+Note: `EXPO_PUBLIC_APP_ENV` is set by workflow to the selected EAS environment (`production` or `preview`).
+
 ### 1) Deploy backend worker
 From `apps/worker`:
 

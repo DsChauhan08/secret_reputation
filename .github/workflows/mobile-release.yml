@@ -1,0 +1,176 @@
+name: Mobile Release Build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "EAS build platform"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - android
+          - ios
+      profile:
+        description: "EAS build profile"
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - preview
+
+concurrency:
+  group: mobile-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  eas-build:
+    name: Start EAS build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+      EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
+      EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
+      EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+      SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_URL: ${{ secrets.SENTRY_URL }}
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        working-directory: .
+        run: bun install --frozen-lockfile
+
+      - name: Resolve build parameters
+        id: params
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            platform="${{ inputs.platform }}"
+            profile="${{ inputs.profile }}"
+          else
+            platform="all"
+            profile="production"
+          fi
+
+          case "$profile" in
+            production|preview|development) eas_environment="$profile" ;;
+            *) eas_environment="production" ;;
+          esac
+
+          echo "platform=$platform" >> "$GITHUB_OUTPUT"
+          echo "profile=$profile" >> "$GITHUB_OUTPUT"
+          echo "eas_environment=$eas_environment" >> "$GITHUB_OUTPUT"
+
+      - name: Validate auth token
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${EAS_TOKEN}" ]; then
+            echo "EAS_TOKEN is not set. Add it as a repository secret." >&2
+            exit 1
+          fi
+
+      - name: Sync EAS env vars
+        shell: bash
+        env:
+          TARGET_EAS_ENV: ${{ steps.params.outputs.eas_environment }}
+        run: |
+          set -euo pipefail
+
+          upsert_env() {
+            local name="$1"
+            local value="$2"
+            local visibility="$3"
+
+            if [ -z "$value" ]; then
+              echo "Skipping empty var: $name"
+              return
+            fi
+
+            npx eas-cli env:create \
+              --non-interactive \
+              --scope project \
+              --environment "$TARGET_EAS_ENV" \
+              --name "$name" \
+              --value "$value" \
+              --visibility "$visibility" \
+              --force
+          }
+
+          upsert_env "EXPO_PUBLIC_POSTHOG_KEY" "${EXPO_PUBLIC_POSTHOG_KEY}" sensitive
+          upsert_env "EXPO_PUBLIC_POSTHOG_HOST" "${EXPO_PUBLIC_POSTHOG_HOST}" plaintext
+          upsert_env "EXPO_PUBLIC_SENTRY_DSN" "${EXPO_PUBLIC_SENTRY_DSN}" sensitive
+          upsert_env "EXPO_PUBLIC_APP_ENV" "$TARGET_EAS_ENV" plaintext
+          upsert_env "SENTRY_ORG" "${SENTRY_ORG}" plaintext
+          upsert_env "SENTRY_PROJECT" "${SENTRY_PROJECT}" plaintext
+          upsert_env "SENTRY_AUTH_TOKEN" "${SENTRY_AUTH_TOKEN}" secret
+          upsert_env "SENTRY_URL" "${SENTRY_URL}" plaintext
+
+      - name: Start remote EAS build
+        id: start_build
+        shell: bash
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name || github.ref_name }}
+        run: |
+          set -euo pipefail
+          npx eas-cli --version
+          npx eas-cli whoami --non-interactive
+
+          npx eas-cli build \
+            --platform "${{ steps.params.outputs.platform }}" \
+            --profile "${{ steps.params.outputs.profile }}" \
+            --message "GitHub release ${TAG_NAME}" \
+            --non-interactive \
+            --no-wait \
+            --json > eas-build.json
+
+      - name: Upload build metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: eas-build-${{ github.run_id }}
+          path: apps/mobile/eas-build.json
+
+      - name: Add build summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "### EAS build started" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Profile: \`${{ steps.params.outputs.profile }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Platform: \`${{ steps.params.outputs.platform }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- EAS environment: \`${{ steps.params.outputs.eas_environment }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Source ref: \`${{ github.ref_name }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Builds:" >> "$GITHUB_STEP_SUMMARY"
+
+          jq -r '
+            def list:
+              if type == "array" then .
+              elif has("builds") then .builds
+              else [.] end;
+
+            list[] |
+              "- Platform: \(.platform // \"unknown\") | ID: \(.id // \"n/a\") | Status: \(.status // \"unknown\") | URL: \(.buildDetailsPageUrl // .buildUrl // .artifacts?.buildUrl // \"n/a\")"
+          ' eas-build.json >> "$GITHUB_STEP_SUMMARY"
