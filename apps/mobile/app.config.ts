@@ -16,28 +16,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ],
   ];
 
-  const sentryOrg = process.env.SENTRY_ORG;
-  const sentryProject = process.env.SENTRY_PROJECT;
-  const sentryUrl = process.env.SENTRY_URL || "https://sentry.io/";
-
-  if (sentryOrg && sentryProject) {
-    plugins.push([
-      "@sentry/react-native/expo",
-      {
-        organization: sentryOrg,
-        project: sentryProject,
-        url: sentryUrl,
-      },
-    ]);
-  } else {
-    plugins.push("@sentry/react-native/expo");
-  }
-
   return {
     ...config,
     name: "Secret Reputation",
     slug: "secret-reputation",
-    version: "1.0.0",
+    version: "1.0.1",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
@@ -58,14 +41,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       },
       edgeToEdgeEnabled: true,
       package: "com.secretreputation.app",
-      versionCode: 1,
+      versionCode: 2,
     },
     plugins,
     extra: {
       wsUrl: process.env.EXPO_PUBLIC_WS_URL || "",
       posthogApiKey: process.env.EXPO_PUBLIC_POSTHOG_KEY || "",
       posthogHost: process.env.EXPO_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
-      sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN || "",
       appEnv: process.env.EXPO_PUBLIC_APP_ENV || (process.env.NODE_ENV ?? "development"),
       eas: {
         projectId: "7d7d87e4-bbee-4cdd-b321-f4d3b6a6c19f",

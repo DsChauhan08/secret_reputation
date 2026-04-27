@@ -40,31 +40,44 @@ Because everyone has a secret reputation among their friends, and this game is t
 
 *This application relies on a Cloudflare Workers backend and a React Native (Expo) frontend.*
 
+## Local Mobile Dev
+
+Run Expo from the mobile workspace (or use root helper scripts):
+
+```bash
+# Recommended (from repo root)
+bun run mobile:start:clear
+
+# Equivalent direct command
+cd apps/mobile && bun x expo start --clear
+```
+
 ## Release Guide (Android APK/AAB + iOS + OSS Store)
 
 ### CI automation (recommended)
 
-This repo includes GitHub Actions workflow `mobile-release.yml` that starts EAS builds for mobile releases and syncs runtime/build env vars to EAS before building.
+This repo includes GitHub Actions workflow `mobile-release.yml` that performs the full Android release path from CLI: it syncs EAS env vars, builds the Play Store AAB, submits it to Google Play, builds a production APK, and uploads that APK to the matching GitHub Release.
 
 Set these **GitHub repository secrets**:
 
 - `EAS_TOKEN` (required, from Expo account)
+- `GOOGLE_SERVICE_ACCOUNT_JSON` (required for Play submission; raw JSON content of Play service account key)
+- `EXPO_PUBLIC_WS_URL`
 - `EXPO_PUBLIC_POSTHOG_KEY`
 - `EXPO_PUBLIC_POSTHOG_HOST` (usually `https://us.i.posthog.com`)
-- `EXPO_PUBLIC_SENTRY_DSN`
-- `SENTRY_ORG`
-- `SENTRY_PROJECT`
-- `SENTRY_AUTH_TOKEN`
-- `SENTRY_URL` (optional, default is `https://sentry.io/`)
 
 How it runs:
 
-- Publishing a GitHub Release triggers a production build (`profile=production`, `platform=all`).
-- You can also run it manually via **Actions -> Mobile Release Build** and choose `preview` or `production` and platform.
-- The workflow writes those values into EAS env for the matching EAS environment and then starts `eas build --non-interactive`.
-- Build metadata is saved as an artifact and URLs are shown in the job summary.
+- Publishing a GitHub Release triggers Android production release automatically.
+- Manual run via **Actions -> Mobile Release Build** is also supported (optionally pass `release_tag`; otherwise latest release tag is used).
+- The workflow writes secrets into EAS `production` environment, then runs:
+  - `bun x eas-cli build --platform android --profile production --wait --json`
+  - `bun x eas-cli submit --platform android --profile production --id <build-id> --wait`
+  - `bun x eas-cli build --platform android --profile production-apk --wait --json`
+- It downloads the generated APK and uploads it to the GitHub Release as `release-assets/secret-reputation-<tag>.apk`.
+- Build metadata is saved as a workflow artifact and URLs are shown in the job summary.
 
-Note: `EXPO_PUBLIC_APP_ENV` is set by workflow to the selected EAS environment (`production` or `preview`).
+Note: `EXPO_PUBLIC_APP_ENV` is set by workflow to `production` for the release pipeline.
 
 ### 1) Deploy backend worker
 From `apps/worker`:
@@ -84,8 +97,11 @@ bun x eas-cli login
 From `apps/mobile`:
 
 ```bash
-# Android internal testing APK
+# Android internal testing APK (preview env)
 bun run build:android:preview
+
+# Android production APK (for GitHub release asset)
+bun run build:android:apk
 
 # Android production AAB
 bun run build:android:production
@@ -98,13 +114,40 @@ bun run build:ios:production
 After EAS build URLs/artifacts are available, create release notes and attach APK (or include build URLs):
 
 ```bash
-gh release create v1.0.0 \
-  --title "Secret Reputation v1.0.0" \
+gh release create v1.0.1 \
+  --title "Secret Reputation v1.0.1" \
   --notes "Initial public release with chaos cards, tie-break transparency, and shared custom question vault." \
   <path-to-apk>
 ```
 
-### 5) Open-source app store publication
+### 5) CLI publish to Play + upload APK to GitHub Release (manual fallback)
+
+From `apps/mobile`:
+
+```bash
+# Prepare Play service account key file expected by eas.json submit profile
+mkdir -p .secrets
+cat > .secrets/google-service-account.json <<'JSON'
+{ ...your Google Play service account JSON... }
+JSON
+
+# Build and submit AAB to Google Play (internal track via submit profile)
+bun x eas-cli build --platform android --profile production --auto-submit --non-interactive --wait
+# or in two explicit commands:
+# bun run build:android:production
+# bun run submit:android:production
+
+# Build production APK for GitHub Releases
+bun run build:android:apk
+```
+
+Then upload APK (from repo root):
+
+```bash
+gh release upload v1.0.1 release-assets/secret-reputation-v1.0.1.apk --clobber
+```
+
+### 6) Open-source app store publication
 
 #### Recommended fast path: IzzyOnDroid
 - Host signed APK in GitHub Releases.
@@ -144,7 +187,7 @@ sdkmanager "platform-tools" "build-tools;35.0.0" "platforms;android-35"
 Verify APK signer fingerprint (used for `AllowedAPKSigningKeys`):
 
 ```bash
-apksigner verify --print-certs release-assets/secret-reputation-v1.0.0.apk
+apksigner verify --print-certs release-assets/secret-reputation-v1.0.1.apk
 ```
 
 #### F-Droid submission (proper prep, excluding screenshots)
@@ -179,9 +222,9 @@ Before opening your `fdroiddata` merge request, complete the following:
 Screenshots can be added later under:
 `fastlane/metadata/android/en-US/images/phoneScreenshots/`
 
-### Current release assets (v1.0.0)
-- APK: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.0.0/secret-reputation-v1.0.0.apk
-- AAB: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.0.0/secret-reputation-v1.0.0.aab
+### Current release assets (v1.0.1)
+- APK: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.0.1/secret-reputation-v1.0.1.apk
+- AAB: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.0.1/secret-reputation-v1.0.1.aab
 
 Note: iOS binaries are distributed through TestFlight/App Store Connect, not open-source Android stores.
 

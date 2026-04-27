@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo } from "react";
-import { Stack, useGlobalSearchParams, useNavigationContainerRef, usePathname } from "expo-router";
+import { Stack, useGlobalSearchParams, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PostHogProvider, PostHogSurveyProvider } from "posthog-react-native";
-import * as Sentry from "@sentry/react-native";
 import { colors } from "../src/theme";
 import { AppErrorBoundary } from "../src/ErrorBoundary";
 import { analytics, trackError } from "../src/analytics";
@@ -29,7 +28,6 @@ function normalizeSearchParams(params: Record<string, string | string[] | undefi
 function RootLayout() {
   const pathname = usePathname();
   const searchParams = useGlobalSearchParams();
-  const navigationRef = useNavigationContainerRef();
 
   const screenProperties = useMemo(
     () => normalizeSearchParams(searchParams),
@@ -48,11 +46,6 @@ function RootLayout() {
       });
     }
   }, [pathname, screenProperties]);
-
-  useEffect(() => {
-    if (!analytics.sentryEnabled || !navigationRef) return;
-    analytics.sentryNavigationIntegration.registerNavigationContainer(navigationRef);
-  }, [navigationRef]);
 
   const appTree = (
     <AppErrorBoundary>
@@ -88,6 +81,4 @@ function RootLayout() {
   );
 }
 
-const WrappedRootLayout = analytics.sentryEnabled ? Sentry.wrap(RootLayout) : RootLayout;
-
-export default WrappedRootLayout;
+export default RootLayout;

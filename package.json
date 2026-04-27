@@ -1,6 +1,12 @@
 {
   "name": "secret-reputation",
   "private": true,
+  "scripts": {
+    "mobile:start": "bun run --cwd apps/mobile start",
+    "mobile:start:clear": "bun run --cwd apps/mobile start -- --clear",
+    "mobile:android": "bun run --cwd apps/mobile android",
+    "mobile:ios": "bun run --cwd apps/mobile ios"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"

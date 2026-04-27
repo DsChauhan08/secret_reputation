@@ -33,9 +33,6 @@ yarn-error.*
 # local env files
 .env*.local
 
-# sentry
-sentry.properties
-
 # typescript
 *.tsbuildinfo
 

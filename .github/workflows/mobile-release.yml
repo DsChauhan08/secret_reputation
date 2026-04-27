@@ -5,43 +5,28 @@ on:
     types: [published]
   workflow_dispatch:
     inputs:
-      platform:
-        description: "EAS build platform"
-        required: true
-        default: all
-        type: choice
-        options:
-          - all
-          - android
-          - ios
-      profile:
-        description: "EAS build profile"
-        required: true
-        default: production
-        type: choice
-        options:
-          - production
-          - preview
+      release_tag:
+        description: "GitHub release tag to upload APK to (defaults to latest release)"
+        required: false
+        type: string
 
 concurrency:
-  group: mobile-release-${{ github.ref_name }}
+  group: mobile-release-${{ github.event.release.tag_name || inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  eas-build:
-    name: Start EAS build
+  android-release:
+    name: Android build, submit, and release asset upload
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     env:
+      GH_TOKEN: ${{ github.token }}
       EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      EXPO_PUBLIC_WS_URL: ${{ secrets.EXPO_PUBLIC_WS_URL }}
       EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
       EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
-      EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
-      SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-      SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      SENTRY_URL: ${{ secrets.SENTRY_URL }}
     defaults:
       run:
         working-directory: apps/mobile
@@ -61,42 +46,60 @@ jobs:
         working-directory: .
         run: bun install --frozen-lockfile
 
-      - name: Resolve build parameters
-        id: params
+      - name: Resolve release tag
+        id: meta
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            platform="${{ inputs.platform }}"
-            profile="${{ inputs.profile }}"
+          if [ "${{ github.event_name }}" = "release" ]; then
+            release_tag="${{ github.event.release.tag_name }}"
+          elif [ -n "${{ inputs.release_tag }}" ]; then
+            release_tag="${{ inputs.release_tag }}"
           else
-            platform="all"
-            profile="production"
+            release_tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName')"
           fi
 
-          case "$profile" in
-            production|preview|development) eas_environment="$profile" ;;
-            *) eas_environment="production" ;;
-          esac
+          if [ -z "$release_tag" ] || [ "$release_tag" = "null" ]; then
+            echo "Could not determine release tag. Provide workflow_dispatch input 'release_tag'." >&2
+            exit 1
+          fi
 
-          echo "platform=$platform" >> "$GITHUB_OUTPUT"
-          echo "profile=$profile" >> "$GITHUB_OUTPUT"
-          echo "eas_environment=$eas_environment" >> "$GITHUB_OUTPUT"
+          gh release view "$release_tag" > /dev/null
 
-      - name: Validate auth token
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Validate required secrets
         shell: bash
         run: |
           set -euo pipefail
+
           if [ -z "${EAS_TOKEN}" ]; then
             echo "EAS_TOKEN is not set. Add it as a repository secret." >&2
             exit 1
           fi
 
-      - name: Sync EAS env vars
+          if [ -z "${GOOGLE_SERVICE_ACCOUNT_JSON}" ]; then
+            echo "GOOGLE_SERVICE_ACCOUNT_JSON is not set. Add Play service account JSON as a repository secret." >&2
+            exit 1
+          fi
+
+      - name: Configure Play service account file
         shell: bash
-        env:
-          TARGET_EAS_ENV: ${{ steps.params.outputs.eas_environment }}
+        run: |
+          set -euo pipefail
+          mkdir -p .secrets
+          printf '%s' "${GOOGLE_SERVICE_ACCOUNT_JSON}" > .secrets/google-service-account.json
+
+      - name: Validate EAS auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun x eas-cli --version
+          bun x eas-cli whoami --non-interactive
+
+      - name: Sync EAS env vars (production)
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -110,67 +113,160 @@ jobs:
               return
             fi
 
-            npx eas-cli env:create \
+            bun x eas-cli env:create \
               --non-interactive \
               --scope project \
-              --environment "$TARGET_EAS_ENV" \
+              --environment production \
               --name "$name" \
               --value "$value" \
               --visibility "$visibility" \
               --force
           }
 
+          upsert_env "EXPO_PUBLIC_WS_URL" "${EXPO_PUBLIC_WS_URL}" plaintext
           upsert_env "EXPO_PUBLIC_POSTHOG_KEY" "${EXPO_PUBLIC_POSTHOG_KEY}" sensitive
           upsert_env "EXPO_PUBLIC_POSTHOG_HOST" "${EXPO_PUBLIC_POSTHOG_HOST}" plaintext
-          upsert_env "EXPO_PUBLIC_SENTRY_DSN" "${EXPO_PUBLIC_SENTRY_DSN}" sensitive
-          upsert_env "EXPO_PUBLIC_APP_ENV" "$TARGET_EAS_ENV" plaintext
-          upsert_env "SENTRY_ORG" "${SENTRY_ORG}" plaintext
-          upsert_env "SENTRY_PROJECT" "${SENTRY_PROJECT}" plaintext
-          upsert_env "SENTRY_AUTH_TOKEN" "${SENTRY_AUTH_TOKEN}" secret
-          upsert_env "SENTRY_URL" "${SENTRY_URL}" plaintext
+          upsert_env "EXPO_PUBLIC_APP_ENV" "production" plaintext
 
-      - name: Start remote EAS build
-        id: start_build
+      - name: Build Android AAB (store)
         shell: bash
         env:
-          TAG_NAME: ${{ github.event.release.tag_name || github.ref_name }}
+          TAG_NAME: ${{ steps.meta.outputs.release_tag }}
         run: |
           set -euo pipefail
-          npx eas-cli --version
-          npx eas-cli whoami --non-interactive
 
-          npx eas-cli build \
-            --platform "${{ steps.params.outputs.platform }}" \
-            --profile "${{ steps.params.outputs.profile }}" \
+          bun x eas-cli build \
+            --platform android \
+            --profile production \
             --message "GitHub release ${TAG_NAME}" \
             --non-interactive \
-            --no-wait \
-            --json > eas-build.json
+            --wait \
+            --json > eas-build-production.json
+
+      - name: Parse AAB build metadata
+        id: aab
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          build_id="$(jq -r 'if type == "array" then .[0].id else .id end' eas-build-production.json)"
+          build_url="$(jq -r 'if type == "array" then (. [0].buildDetailsPageUrl // .[0].buildUrl // "n/a") else (.buildDetailsPageUrl // .buildUrl // "n/a") end' eas-build-production.json)"
+
+          if [ -z "$build_id" ] || [ "$build_id" = "null" ]; then
+            echo "Unable to resolve Android AAB build id." >&2
+            cat eas-build-production.json
+            exit 1
+          fi
+
+          echo "build_id=$build_id" >> "$GITHUB_OUTPUT"
+          echo "build_url=$build_url" >> "$GITHUB_OUTPUT"
+
+      - name: Submit Android AAB to Google Play
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          bun x eas-cli submit \
+            --platform android \
+            --profile production \
+            --id "${{ steps.aab.outputs.build_id }}" \
+            --non-interactive \
+            --wait
+
+      - name: Build Android APK (release asset)
+        shell: bash
+        env:
+          TAG_NAME: ${{ steps.meta.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          bun x eas-cli build \
+            --platform android \
+            --profile production-apk \
+            --message "GitHub release ${TAG_NAME} APK asset" \
+            --non-interactive \
+            --wait \
+            --json > eas-build-apk.json
+
+      - name: Parse APK build metadata
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          build_id="$(jq -r 'if type == "array" then .[0].id else .id end' eas-build-apk.json)"
+          build_url="$(jq -r 'if type == "array" then (. [0].buildDetailsPageUrl // .[0].buildUrl // "n/a") else (.buildDetailsPageUrl // .buildUrl // "n/a") end' eas-build-apk.json)"
+          artifact_url="$(jq -r 'if type == "array" then (. [0].artifacts.buildUrl // empty) else (.artifacts.buildUrl // empty) end' eas-build-apk.json)"
+
+          if [ -z "$build_id" ] || [ "$build_id" = "null" ]; then
+            echo "Unable to resolve Android APK build id." >&2
+            cat eas-build-apk.json
+            exit 1
+          fi
+
+          if [ -z "$artifact_url" ] || [ "$artifact_url" = "null" ]; then
+            echo "Unable to resolve Android APK artifact URL." >&2
+            cat eas-build-apk.json
+            exit 1
+          fi
+
+          echo "build_id=$build_id" >> "$GITHUB_OUTPUT"
+          echo "build_url=$build_url" >> "$GITHUB_OUTPUT"
+          echo "artifact_url=$artifact_url" >> "$GITHUB_OUTPUT"
+
+      - name: Download APK artifact
+        id: download
+        shell: bash
+        env:
+          TAG_NAME: ${{ steps.meta.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p ../../release-assets
+
+          apk_name="secret-reputation-${TAG_NAME}.apk"
+          apk_path="../../release-assets/${apk_name}"
+
+          curl -fL "${{ steps.apk.outputs.artifact_url }}" -o "$apk_path"
+
+          if [ ! -s "$apk_path" ]; then
+            echo "Downloaded APK is empty or missing at $apk_path" >&2
+            exit 1
+          fi
+
+          echo "apk_name=$apk_name" >> "$GITHUB_OUTPUT"
+          echo "apk_path=release-assets/${apk_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK to GitHub release
+        shell: bash
+        working-directory: .
+        run: |
+          set -euo pipefail
+
+          gh release upload \
+            "${{ steps.meta.outputs.release_tag }}" \
+            "${{ steps.download.outputs.apk_path }}" \
+            --clobber
 
       - name: Upload build metadata
         uses: actions/upload-artifact@v4
         with:
-          name: eas-build-${{ github.run_id }}
-          path: apps/mobile/eas-build.json
+          name: eas-android-release-${{ github.run_id }}
+          path: |
+            apps/mobile/eas-build-production.json
+            apps/mobile/eas-build-apk.json
 
-      - name: Add build summary
+      - name: Add summary
         shell: bash
         run: |
           set -euo pipefail
-          echo "### EAS build started" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Profile: \`${{ steps.params.outputs.profile }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Platform: \`${{ steps.params.outputs.platform }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- EAS environment: \`${{ steps.params.outputs.eas_environment }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Source ref: \`${{ github.ref_name }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Builds:" >> "$GITHUB_STEP_SUMMARY"
 
-          jq -r '
-            def list:
-              if type == "array" then .
-              elif has("builds") then .builds
-              else [.] end;
-
-            list[] |
-              "- Platform: \(.platform // \"unknown\") | ID: \(.id // \"n/a\") | Status: \(.status // \"unknown\") | URL: \(.buildDetailsPageUrl // .buildUrl // .artifacts?.buildUrl // \"n/a\")"
-          ' eas-build.json >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Android release pipeline completed"
+            echo "- Release tag: \`${{ steps.meta.outputs.release_tag }}\`"
+            echo "- Store build profile: \`production\`"
+            echo "- APK build profile: \`production-apk\`"
+            echo "- AAB build: ${{ steps.aab.outputs.build_url }}"
+            echo "- APK build: ${{ steps.apk.outputs.build_url }}"
+            echo "- Uploaded APK asset: \`${{ steps.download.outputs.apk_path }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
