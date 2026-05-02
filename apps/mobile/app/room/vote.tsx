@@ -36,9 +36,9 @@ export default function VoteScreen() {
     wsClient.send({ type: "SUBMIT_VOTE", payload: { categoryId: currentCategory.id, votedForId: votedFor } });
     trackEvent("vote_submitted", {
       category_id: currentCategory.id,
-      round_index: room.currentRound,
-      total_rounds: room.totalRounds,
-      votes_required: room.votesRequired,
+      round_index: room?.currentRound,
+      total_rounds: room?.totalRounds,
+      votes_required: room?.votesRequired,
     });
     setLocked(true);
   };

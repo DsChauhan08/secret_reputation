@@ -1,3 +1,4 @@
+// @ts-nocheck — standalone Bun script, excluded from tsc (see tsconfig.json exclude)
 const WS_URL = process.env.WS_URL ?? "wss://secret-reputation.singhdschauhan10.workers.dev";
 const HTTP_URL = process.env.HTTP_URL ?? "https://secret-reputation.singhdschauhan10.workers.dev";
 

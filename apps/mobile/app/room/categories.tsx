@@ -148,7 +148,7 @@ export default function CategoriesScreen() {
       selected_count: selectedIds.length,
       custom_selected_count: selectedCustomCategories.length,
       chaos_enabled: chaosMode,
-      mode: room.mode,
+      mode: room?.mode,
     });
   };
 
