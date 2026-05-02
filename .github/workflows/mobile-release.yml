@@ -27,7 +27,7 @@ jobs:
       contents: read
     env:
       GH_TOKEN: ${{ github.token }}
-      EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_PUBLIC_WS_URL: ${{ secrets.EXPO_PUBLIC_WS_URL }}
       EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
       EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
@@ -80,8 +80,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${EAS_TOKEN}" ]; then
-            echo "EAS_TOKEN is not set. Add it as a repository secret." >&2
+          if [ -z "${EXPO_TOKEN}" ]; then
+            echo "EXPO_TOKEN is not set. Add it as a repository secret." >&2
             exit 1
           fi
 
@@ -128,7 +128,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     defaults:
       run:
         working-directory: apps/mobile
@@ -206,7 +206,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     defaults:
       run:
         working-directory: apps/mobile
@@ -284,7 +284,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     defaults:
       run:
         working-directory: apps/mobile

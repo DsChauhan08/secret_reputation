@@ -60,7 +60,7 @@ This repo includes GitHub Actions workflow `mobile-release.yml` that builds all 
 
 Set these **GitHub repository secrets**:
 
-- `EAS_TOKEN` (**required**, from your Expo account)
+- `EXPO_TOKEN` (**required**, from your Expo account)
 - `EXPO_PUBLIC_WS_URL`
 - `EXPO_PUBLIC_POSTHOG_KEY`
 - `EXPO_PUBLIC_POSTHOG_HOST` (usually `https://us.i.posthog.com`)
