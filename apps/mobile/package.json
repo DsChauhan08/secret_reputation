@@ -1,6 +1,6 @@
 {
   "name": "secret-reputation-mobile",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -10,7 +10,7 @@
     "build:android:apk": "bun x eas-cli build --platform android --profile production-apk --non-interactive",
     "build:android:production": "bun x eas-cli build --platform android --profile production --non-interactive",
     "build:ios:production": "bun x eas-cli build --platform ios --profile production --non-interactive",
-    "submit:android:production": "bun x eas-cli submit --platform android --profile production --non-interactive"
+    "build:ios:ipa": "bun x eas-cli build --platform ios --profile production-ipa --non-interactive"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",

@@ -4,7 +4,7 @@
 Secret Reputation is an anonymous, multiplayer party game that thrives on chaos, radical honesty, and a little bit of drama. It's a mobile game where you join a virtual room with your friends and vote on who is the "most likely to..." for wildly specific, tailored prompts. The catch? Every vote is completely anonymous.
 
 ## Why should you play it?
-Because everyone has a secret reputation among their friends, and this game is the ultimate way to figure out what yours is. Secret Reputation strips away the politeness and lets your friends expose what they really think about you based on real group dynamics. It’s the perfect icebreaker, a brilliant way to laugh at yourselves, and a guaranteed catalyst for unforgettable stories (and probably a few harmless arguments). With an instantly familiar, extremely minimal iOS-like design, it gets out of its own way so the focus stays entirely on the fun.
+Because everyone has a secret reputation among their friends, and this game is the ultimate way to figure out what yours is. Secret Reputation strips away the politeness and lets your friends expose what they really think about you based on real group dynamics. It's the perfect icebreaker, a brilliant way to laugh at yourselves, and a guaranteed catalyst for unforgettable stories (and probably a few harmless arguments). With an instantly familiar, extremely minimal iOS-like design, it gets out of its own way so the focus stays entirely on the fun.
 
 ## Guide to Play
 
@@ -23,14 +23,14 @@ Because everyone has a secret reputation among their friends, and this game is t
 - Everyone will gather in the Lobby.
 
 ### 3. The Voting Phase
-- Once the Host taps **Start Game**, everyone’s screen will sync to the first Category (e.g., *"Most likely to start a cult accidentally"*).
+- Once the Host taps **Start Game**, everyone's screen will sync to the first Category (e.g., *"Most likely to start a cult accidentally"*).
 - Each player secretly selects the friend they think best fits the prompt. 
 - *Note: You cannot vote for yourself!*
 
 ### 4. The Reveal
 - Once all votes are securely locked in, the results are calculated.
 - The app will automatically reveal the winner, the runner-up, and exact vote breakdowns.
-- The game will generate custom commentary assessing how unanimous or split the group’s opinion was.
+- The game will generate custom commentary assessing how unanimous or split the group's opinion was.
 
 ### 5. Final Results
 - At the end of all rounds, the app will display a summary of everyone's "Secret Reputation."
@@ -52,32 +52,31 @@ bun run mobile:start:clear
 cd apps/mobile && bun x expo start --clear
 ```
 
-## Release Guide (Android APK/AAB + iOS + OSS Store)
+## Release Guide (Android APK/AAB + iOS IPA)
 
 ### CI automation (recommended)
 
-This repo includes GitHub Actions workflow `mobile-release.yml` that performs the full Android release path from CLI: it syncs EAS env vars, builds the Play Store AAB, submits it to Google Play, builds a production APK, and uploads that APK to the matching GitHub Release.
+This repo includes GitHub Actions workflow `mobile-release.yml` that builds all release artifacts in parallel using EAS Build and uploads them to the matching GitHub Release.
 
 Set these **GitHub repository secrets**:
 
-- `EAS_TOKEN` (required, from Expo account)
-- `GOOGLE_SERVICE_ACCOUNT_JSON` (required for Play submission; raw JSON content of Play service account key)
+- `EAS_TOKEN` (**required**, from your Expo account)
 - `EXPO_PUBLIC_WS_URL`
 - `EXPO_PUBLIC_POSTHOG_KEY`
 - `EXPO_PUBLIC_POSTHOG_HOST` (usually `https://us.i.posthog.com`)
 
 How it runs:
 
-- Publishing a GitHub Release triggers Android production release automatically.
-- Manual run via **Actions -> Mobile Release Build** is also supported (optionally pass `release_tag`; otherwise latest release tag is used).
-- The workflow writes secrets into EAS `production` environment, then runs:
-  - `bun x eas-cli build --platform android --profile production --wait --json`
-  - `bun x eas-cli submit --platform android --profile production --id <build-id> --wait`
-  - `bun x eas-cli build --platform android --profile production-apk --wait --json`
-- It downloads the generated APK and uploads it to the GitHub Release as `release-assets/secret-reputation-<tag>.apk`.
-- Build metadata is saved as a workflow artifact and URLs are shown in the job summary.
+- Publishing a GitHub Release triggers all three builds automatically.
+- Manual run via **Actions → Mobile Release Build** is also supported (optionally pass `release_tag`; otherwise latest release tag is used).
+- The workflow syncs secrets into the EAS `production` environment, then runs three parallel jobs:
+  - **Android AAB** (`production` profile) → uploads `secret-reputation-<tag>.aab`
+  - **Android APK** (`production-apk` profile) → uploads `secret-reputation-<tag>.apk`
+  - **iOS IPA** (`production-ipa` profile) → uploads `secret-reputation-<tag>.ipa`
+- Build metadata is saved as workflow artifacts and a summary table is shown in the job.
 
-Note: `EXPO_PUBLIC_APP_ENV` is set by workflow to `production` for the release pipeline.
+> **Note:** iOS builds require Apple Developer credentials configured in your EAS dashboard.
+> Android builds work independently of iOS.
 
 ### 1) Deploy backend worker
 From `apps/worker`:
@@ -103,51 +102,29 @@ bun run build:android:preview
 # Android production APK (for GitHub release asset)
 bun run build:android:apk
 
-# Android production AAB
+# Android production AAB (for store distribution)
 bun run build:android:production
 
-# iOS production archive
+# iOS production IPA (ad-hoc distribution)
+bun run build:ios:ipa
+
+# iOS production archive (App Store / TestFlight)
 bun run build:ios:production
 ```
 
 ### 4) Create GitHub release
-After EAS build URLs/artifacts are available, create release notes and attach APK (or include build URLs):
+After EAS build URLs/artifacts are available, create release notes and attach binaries:
 
 ```bash
-gh release create v1.0.1 \
-  --title "Secret Reputation v1.0.1" \
-  --notes "Initial public release with chaos cards, tie-break transparency, and shared custom question vault." \
-  <path-to-apk>
+gh release create v1.1.0 \
+  --title "Secret Reputation v1.1.0" \
+  --notes "Clean release pipeline with parallel APK/AAB/IPA builds." \
+  release-assets/secret-reputation-v1.1.0.apk \
+  release-assets/secret-reputation-v1.1.0.aab \
+  release-assets/secret-reputation-v1.1.0.ipa
 ```
 
-### 5) CLI publish to Play + upload APK to GitHub Release (manual fallback)
-
-From `apps/mobile`:
-
-```bash
-# Prepare Play service account key file expected by eas.json submit profile
-mkdir -p .secrets
-cat > .secrets/google-service-account.json <<'JSON'
-{ ...your Google Play service account JSON... }
-JSON
-
-# Build and submit AAB to Google Play (internal track via submit profile)
-bun x eas-cli build --platform android --profile production --auto-submit --non-interactive --wait
-# or in two explicit commands:
-# bun run build:android:production
-# bun run submit:android:production
-
-# Build production APK for GitHub Releases
-bun run build:android:apk
-```
-
-Then upload APK (from repo root):
-
-```bash
-gh release upload v1.0.1 release-assets/secret-reputation-v1.0.1.apk --clobber
-```
-
-### 6) Open-source app store publication
+### 5) Open-source app store publication
 
 #### Recommended fast path: IzzyOnDroid
 - Host signed APK in GitHub Releases.
@@ -187,7 +164,7 @@ sdkmanager "platform-tools" "build-tools;35.0.0" "platforms;android-35"
 Verify APK signer fingerprint (used for `AllowedAPKSigningKeys`):
 
 ```bash
-apksigner verify --print-certs release-assets/secret-reputation-v1.0.1.apk
+apksigner verify --print-certs release-assets/secret-reputation-v1.1.0.apk
 ```
 
 #### F-Droid submission (proper prep, excluding screenshots)
@@ -201,7 +178,7 @@ This repository already includes F-Droid/fastlane starter metadata at:
 
 Before opening your `fdroiddata` merge request, complete the following:
 
-1. **Cut optimized release tag** (recommended: `v1.0.1+`) and upload the optimized APK.
+1. **Cut optimized release tag** (recommended: `v1.1.0+`) and upload the optimized APK.
 2. **Extract signer fingerprint** from that APK and set `AllowedAPKSigningKeys` in
    `fdroid/metadata/com.secretreputation.app.yml`:
 
@@ -222,11 +199,12 @@ Before opening your `fdroiddata` merge request, complete the following:
 Screenshots can be added later under:
 `fastlane/metadata/android/en-US/images/phoneScreenshots/`
 
-### Current release assets (v1.0.1)
-- APK: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.0.1/secret-reputation-v1.0.1.apk
-- AAB: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.0.1/secret-reputation-v1.0.1.aab
+### Current release assets (v1.1.0)
+- APK: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.1.0/secret-reputation-v1.1.0.apk
+- AAB: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.1.0/secret-reputation-v1.1.0.aab
+- IPA: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.1.0/secret-reputation-v1.1.0.ipa
 
-Note: iOS binaries are distributed through TestFlight/App Store Connect, not open-source Android stores.
+Note: iOS `.ipa` is ad-hoc distribution (requires registered device UDIDs). For App Store distribution, use the `production` build profile via EAS and submit through App Store Connect.
 
 ## Automated gameplay tests (no multiple phones required)
 

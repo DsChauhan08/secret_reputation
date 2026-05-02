@@ -6,27 +6,33 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "GitHub release tag to upload APK to (defaults to latest release)"
+        description: "GitHub release tag to upload assets to (defaults to latest release)"
         required: false
         type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
   group: mobile-release-${{ github.event.release.tag_name || inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
+# ─── shared setup ────────────────────────────────────────────────────────────
+
 jobs:
-  android-release:
-    name: Android build, submit, and release asset upload
+  setup:
+    name: Validate & sync EAS environment
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     env:
       GH_TOKEN: ${{ github.token }}
       EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
-      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
       EXPO_PUBLIC_WS_URL: ${{ secrets.EXPO_PUBLIC_WS_URL }}
       EXPO_PUBLIC_POSTHOG_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_KEY }}
       EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
+    outputs:
+      release_tag: ${{ steps.meta.outputs.release_tag }}
     defaults:
       run:
         working-directory: apps/mobile
@@ -37,7 +43,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -69,7 +75,7 @@ jobs:
 
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
 
-      - name: Validate required secrets
+      - name: Validate EAS token
         shell: bash
         run: |
           set -euo pipefail
@@ -79,22 +85,6 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${GOOGLE_SERVICE_ACCOUNT_JSON}" ]; then
-            echo "GOOGLE_SERVICE_ACCOUNT_JSON is not set. Add Play service account JSON as a repository secret." >&2
-            exit 1
-          fi
-
-      - name: Configure Play service account file
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p .secrets
-          printf '%s' "${GOOGLE_SERVICE_ACCOUNT_JSON}" > .secrets/google-service-account.json
-
-      - name: Validate EAS auth
-        shell: bash
-        run: |
-          set -euo pipefail
           bun x eas-cli --version
           bun x eas-cli whoami --non-interactive
 
@@ -128,10 +118,40 @@ jobs:
           upsert_env "EXPO_PUBLIC_POSTHOG_HOST" "${EXPO_PUBLIC_POSTHOG_HOST}" plaintext
           upsert_env "EXPO_PUBLIC_APP_ENV" "production" plaintext
 
-      - name: Build Android AAB (store)
+# ─── Android AAB ─────────────────────────────────────────────────────────────
+
+  android-aab:
+    name: Build Android AAB
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        working-directory: .
+        run: bun install --frozen-lockfile
+
+      - name: Build AAB
         shell: bash
         env:
-          TAG_NAME: ${{ steps.meta.outputs.release_tag }}
+          TAG_NAME: ${{ needs.setup.outputs.release_tag }}
         run: |
           set -euo pipefail
 
@@ -141,132 +161,217 @@ jobs:
             --message "GitHub release ${TAG_NAME}" \
             --non-interactive \
             --wait \
-            --json > eas-build-production.json
+            --json > eas-build-aab.json
 
-      - name: Parse AAB build metadata
-        id: aab
+      - name: Download & upload AAB
         shell: bash
+        env:
+          TAG_NAME: ${{ needs.setup.outputs.release_tag }}
         run: |
           set -euo pipefail
 
-          build_id="$(jq -r 'if type == "array" then .[0].id else .id end' eas-build-production.json)"
-          build_url="$(jq -r 'if type == "array" then (. [0].buildDetailsPageUrl // .[0].buildUrl // "n/a") else (.buildDetailsPageUrl // .buildUrl // "n/a") end' eas-build-production.json)"
+          artifact_url="$(jq -r 'if type == "array" then .[0].artifacts.buildUrl else .artifacts.buildUrl end' eas-build-aab.json)"
 
-          if [ -z "$build_id" ] || [ "$build_id" = "null" ]; then
-            echo "Unable to resolve Android AAB build id." >&2
-            cat eas-build-production.json
+          if [ -z "$artifact_url" ] || [ "$artifact_url" = "null" ]; then
+            echo "Unable to resolve AAB artifact URL." >&2
+            cat eas-build-aab.json
             exit 1
           fi
 
-          echo "build_id=$build_id" >> "$GITHUB_OUTPUT"
-          echo "build_url=$build_url" >> "$GITHUB_OUTPUT"
+          mkdir -p ../../release-assets
+          aab_name="secret-reputation-${TAG_NAME}.aab"
+          curl -fL "$artifact_url" -o "../../release-assets/${aab_name}"
 
-      - name: Submit Android AAB to Google Play
-        shell: bash
-        run: |
-          set -euo pipefail
+          if [ ! -s "../../release-assets/${aab_name}" ]; then
+            echo "Downloaded AAB is empty or missing." >&2
+            exit 1
+          fi
 
-          bun x eas-cli submit \
-            --platform android \
-            --profile production \
-            --id "${{ steps.aab.outputs.build_id }}" \
-            --non-interactive \
-            --wait
+          cd ../..
+          gh release upload "${TAG_NAME}" "release-assets/${aab_name}" --clobber
 
-      - name: Build Android APK (release asset)
+      - name: Upload build metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: eas-aab-${{ github.run_id }}
+          path: apps/mobile/eas-build-aab.json
+
+# ─── Android APK ─────────────────────────────────────────────────────────────
+
+  android-apk:
+    name: Build Android APK
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        working-directory: .
+        run: bun install --frozen-lockfile
+
+      - name: Build APK
         shell: bash
         env:
-          TAG_NAME: ${{ steps.meta.outputs.release_tag }}
+          TAG_NAME: ${{ needs.setup.outputs.release_tag }}
         run: |
           set -euo pipefail
 
           bun x eas-cli build \
             --platform android \
             --profile production-apk \
-            --message "GitHub release ${TAG_NAME} APK asset" \
+            --message "GitHub release ${TAG_NAME} APK" \
             --non-interactive \
             --wait \
             --json > eas-build-apk.json
 
-      - name: Parse APK build metadata
-        id: apk
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          build_id="$(jq -r 'if type == "array" then .[0].id else .id end' eas-build-apk.json)"
-          build_url="$(jq -r 'if type == "array" then (. [0].buildDetailsPageUrl // .[0].buildUrl // "n/a") else (.buildDetailsPageUrl // .buildUrl // "n/a") end' eas-build-apk.json)"
-          artifact_url="$(jq -r 'if type == "array" then (. [0].artifacts.buildUrl // empty) else (.artifacts.buildUrl // empty) end' eas-build-apk.json)"
-
-          if [ -z "$build_id" ] || [ "$build_id" = "null" ]; then
-            echo "Unable to resolve Android APK build id." >&2
-            cat eas-build-apk.json
-            exit 1
-          fi
-
-          if [ -z "$artifact_url" ] || [ "$artifact_url" = "null" ]; then
-            echo "Unable to resolve Android APK artifact URL." >&2
-            cat eas-build-apk.json
-            exit 1
-          fi
-
-          echo "build_id=$build_id" >> "$GITHUB_OUTPUT"
-          echo "build_url=$build_url" >> "$GITHUB_OUTPUT"
-          echo "artifact_url=$artifact_url" >> "$GITHUB_OUTPUT"
-
-      - name: Download APK artifact
-        id: download
+      - name: Download & upload APK
         shell: bash
         env:
-          TAG_NAME: ${{ steps.meta.outputs.release_tag }}
+          TAG_NAME: ${{ needs.setup.outputs.release_tag }}
         run: |
           set -euo pipefail
 
-          mkdir -p ../../release-assets
+          artifact_url="$(jq -r 'if type == "array" then .[0].artifacts.buildUrl else .artifacts.buildUrl end' eas-build-apk.json)"
 
-          apk_name="secret-reputation-${TAG_NAME}.apk"
-          apk_path="../../release-assets/${apk_name}"
-
-          curl -fL "${{ steps.apk.outputs.artifact_url }}" -o "$apk_path"
-
-          if [ ! -s "$apk_path" ]; then
-            echo "Downloaded APK is empty or missing at $apk_path" >&2
+          if [ -z "$artifact_url" ] || [ "$artifact_url" = "null" ]; then
+            echo "Unable to resolve APK artifact URL." >&2
+            cat eas-build-apk.json
             exit 1
           fi
 
-          echo "apk_name=$apk_name" >> "$GITHUB_OUTPUT"
-          echo "apk_path=release-assets/${apk_name}" >> "$GITHUB_OUTPUT"
+          mkdir -p ../../release-assets
+          apk_name="secret-reputation-${TAG_NAME}.apk"
+          curl -fL "$artifact_url" -o "../../release-assets/${apk_name}"
 
-      - name: Upload APK to GitHub release
-        shell: bash
-        working-directory: .
-        run: |
-          set -euo pipefail
+          if [ ! -s "../../release-assets/${apk_name}" ]; then
+            echo "Downloaded APK is empty or missing." >&2
+            exit 1
+          fi
 
-          gh release upload \
-            "${{ steps.meta.outputs.release_tag }}" \
-            "${{ steps.download.outputs.apk_path }}" \
-            --clobber
+          cd ../..
+          gh release upload "${TAG_NAME}" "release-assets/${apk_name}" --clobber
 
       - name: Upload build metadata
         uses: actions/upload-artifact@v4
         with:
-          name: eas-android-release-${{ github.run_id }}
-          path: |
-            apps/mobile/eas-build-production.json
-            apps/mobile/eas-build-apk.json
+          name: eas-apk-${{ github.run_id }}
+          path: apps/mobile/eas-build-apk.json
 
-      - name: Add summary
+# ─── iOS IPA ─────────────────────────────────────────────────────────────────
+
+  ios-ipa:
+    name: Build iOS IPA
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        working-directory: .
+        run: bun install --frozen-lockfile
+
+      - name: Build IPA
+        shell: bash
+        env:
+          TAG_NAME: ${{ needs.setup.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          bun x eas-cli build \
+            --platform ios \
+            --profile production-ipa \
+            --message "GitHub release ${TAG_NAME} IPA" \
+            --non-interactive \
+            --wait \
+            --json > eas-build-ipa.json
+
+      - name: Download & upload IPA
+        shell: bash
+        env:
+          TAG_NAME: ${{ needs.setup.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          artifact_url="$(jq -r 'if type == "array" then .[0].artifacts.buildUrl else .artifacts.buildUrl end' eas-build-ipa.json)"
+
+          if [ -z "$artifact_url" ] || [ "$artifact_url" = "null" ]; then
+            echo "Unable to resolve IPA artifact URL." >&2
+            cat eas-build-ipa.json
+            exit 1
+          fi
+
+          mkdir -p ../../release-assets
+          ipa_name="secret-reputation-${TAG_NAME}.ipa"
+          curl -fL "$artifact_url" -o "../../release-assets/${ipa_name}"
+
+          if [ ! -s "../../release-assets/${ipa_name}" ]; then
+            echo "Downloaded IPA is empty or missing." >&2
+            exit 1
+          fi
+
+          cd ../..
+          gh release upload "${TAG_NAME}" "release-assets/${ipa_name}" --clobber
+
+      - name: Upload build metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: eas-ipa-${{ github.run_id }}
+          path: apps/mobile/eas-build-ipa.json
+
+# ─── Summary ─────────────────────────────────────────────────────────────────
+
+  summary:
+    name: Release summary
+    needs: [setup, android-aab, android-apk, ios-ipa]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build summary
         shell: bash
         run: |
           set -euo pipefail
 
           {
-            echo "### Android release pipeline completed"
-            echo "- Release tag: \`${{ steps.meta.outputs.release_tag }}\`"
-            echo "- Store build profile: \`production\`"
-            echo "- APK build profile: \`production-apk\`"
-            echo "- AAB build: ${{ steps.aab.outputs.build_url }}"
-            echo "- APK build: ${{ steps.apk.outputs.build_url }}"
-            echo "- Uploaded APK asset: \`${{ steps.download.outputs.apk_path }}\`"
+            echo "### Mobile release pipeline completed"
+            echo "- Release tag: \`${{ needs.setup.outputs.release_tag }}\`"
+            echo ""
+            echo "| Artifact | Job Status |"
+            echo "|----------|------------|"
+            echo "| Android AAB (.aab) | \`${{ needs.android-aab.result }}\` |"
+            echo "| Android APK (.apk) | \`${{ needs.android-apk.result }}\` |"
+            echo "| iOS IPA (.ipa) | \`${{ needs.ios-ipa.result }}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
