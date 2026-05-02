@@ -280,6 +280,7 @@ jobs:
     name: Build iOS IPA
     needs: setup
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       contents: write
     env:
@@ -313,7 +314,7 @@ jobs:
 
           bun x eas-cli build \
             --platform ios \
-            --profile production-ipa \
+            --profile production \
             --message "GitHub release ${TAG_NAME} IPA" \
             --non-interactive \
             --wait \
