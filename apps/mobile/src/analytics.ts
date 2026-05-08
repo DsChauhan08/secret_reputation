@@ -32,11 +32,12 @@ const posthogClient = posthogEnabled
   : null;
 
 // Adaptively enable session replay on powerful devices only.
+// Uses startSessionRecording() — the PostHog RN runtime API.
 if (posthogClient && !__DEV__) {
   isPremiumCapable()
     .then((capable) => {
       if (capable) {
-        posthogClient.setSessionReplayEnabled(true);
+        posthogClient.startSessionRecording().catch(() => {});
       }
     })
     .catch(() => {
