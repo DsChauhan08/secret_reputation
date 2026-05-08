@@ -10,7 +10,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         android: {
           enableProguardInReleaseBuilds: true,
           enableShrinkResourcesInReleaseBuilds: true,
-          buildArchs: ["arm64-v8a"],
+          buildArchs: ["armeabi-v7a", "arm64-v8a"],
         },
       },
     ],

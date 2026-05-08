@@ -1,5 +1,6 @@
 import Constants from "expo-constants";
 import PostHog from "posthog-react-native";
+import { isPremiumCapable } from "./deviceCaps";
 
 type EventProperties = Record<string, any>;
 
@@ -17,17 +18,31 @@ const appEnvironment = typeof extra.appEnv === "string" ? extra.appEnv : "develo
 
 const posthogEnabled = posthogApiKey.length > 0;
 
+// Start without session replay — enable it lazily once we confirm the device can handle it.
 const posthogClient = posthogEnabled
   ? new PostHog(posthogApiKey, {
       host: posthogHost,
       captureAppLifecycleEvents: true,
-      enableSessionReplay: !__DEV__,
+      enableSessionReplay: false,
       sessionReplayConfig: {
         maskAllTextInputs: true,
         maskAllImages: true,
       },
     })
   : null;
+
+// Adaptively enable session replay on powerful devices only.
+if (posthogClient && !__DEV__) {
+  isPremiumCapable()
+    .then((capable) => {
+      if (capable) {
+        posthogClient.setSessionReplayEnabled(true);
+      }
+    })
+    .catch(() => {
+      // Device detection failed — keep replay off (safe default).
+    });
+}
 
 function redact(input: string): string {
   if (!input) return "";
