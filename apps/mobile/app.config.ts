@@ -20,7 +20,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ...config,
     name: "Secret Reputation",
     slug: "secret-reputation",
-    version: "1.1.0",
+    version: "1.1.1",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
@@ -41,7 +41,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       },
       edgeToEdgeEnabled: true,
       package: "com.secretreputation.app",
-      versionCode: 3,
+      versionCode: 4,
     },
     plugins,
     extra: {

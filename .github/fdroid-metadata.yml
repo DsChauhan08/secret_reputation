@@ -4,12 +4,12 @@ package_id: com.secretreputation.app
 license: MIT
 source_code: https://github.com/DsChauhan08/secret_reputation
 issue_tracker: https://github.com/DsChauhan08/secret_reputation/issues
-release_tag: v1.1.0
+release_tag: v1.1.1
 
 android:
-  apk_asset_url: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.1.0/secret-reputation-v1.1.0.apk
+  apk_asset_url: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.1.1/secret-reputation-v1.1.1.apk
   apk_sha256: TO_BE_FILLED_AFTER_BUILD
-  aab_asset_url: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.1.0/secret-reputation-v1.1.0.aab
+  aab_asset_url: https://github.com/DsChauhan08/secret_reputation/releases/download/v1.1.1/secret-reputation-v1.1.1.aab
   aab_sha256: TO_BE_FILLED_AFTER_BUILD
 
 notes:
